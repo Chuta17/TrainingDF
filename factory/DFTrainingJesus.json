@@ -1,0 +1,9 @@
+{
+	"name": "DFTrainingJesus",
+	"location": "eastus",
+	"identity": {
+		"type": "SystemAssigned",
+		"principalId": "fce84ca4-0f3a-48d9-99ef-a37606197d4c",
+		"tenantId": "72f988bf-86f1-41af-91ab-2d7cd011db47"
+	}
+}
