@@ -1,0 +1,9 @@
+{
+	"name": "DF4Testing",
+	"location": "eastus",
+	"identity": {
+		"type": "SystemAssigned",
+		"principalId": "a8ac61eb-835d-4dc1-8cff-1dc57bcb7ee4",
+		"tenantId": "72f988bf-86f1-41af-91ab-2d7cd011db47"
+	}
+}
