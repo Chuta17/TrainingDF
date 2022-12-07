@@ -1,0 +1,29 @@
+{
+	"name": "Trigger 1",
+	"properties": {
+		"annotations": [],
+		"runtimeState": "Started",
+		"pipelines": [
+			{
+				"pipelineReference": {
+					"referenceName": "DataverseToSQL",
+					"type": "PipelineReference"
+				},
+				"parameters": {
+					"container": "dataverse-iwsservices-iwsmexico",
+					"folder": "/"
+				}
+			}
+		],
+		"type": "BlobEventsTrigger",
+		"typeProperties": {
+			"blobPathBeginsWith": "/dataverse-iwsservices-iwsmexico/blobs/model",
+			"blobPathEndsWith": ".json",
+			"ignoreEmptyBlobs": true,
+			"scope": "/subscriptions/9760aeb2-4c58-4f0e-a07b-0b64133ff0f7/resourceGroups/CrmOnline/providers/Microsoft.Storage/storageAccounts/dataverseiwsreplication",
+			"events": [
+				"Microsoft.Storage.BlobCreated"
+			]
+		}
+	}
+}
