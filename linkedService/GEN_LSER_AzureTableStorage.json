@@ -1,0 +1,51 @@
+{
+	"name": "GEN_LSER_AzureTableStorage",
+	"type": "Microsoft.DataFactory/factories/linkedservices",
+	"properties": {
+		"description": "Linked service generico que permite conectar a cualquier Azure Table Storage",
+		"parameters": {
+			"url": {
+				"type": "string",
+				"defaultValue": "https://storbibanp2.dfs.core.windows.net"
+			},
+			"key": {
+				"type": "string",
+				"defaultValue": "secret-storageaccount-key1"
+			},
+			"keyvault_url": {
+				"type": "string",
+				"defaultValue": "https://Kvl-BIBA-Np.vault.azure.net/"
+			},
+			"account": {
+				"type": "string",
+				"defaultValue": "storbibanp2"
+			}
+		},
+		"annotations": [],
+		"type": "AzureTableStorage",
+		"typeProperties": {
+			"connectionString": "DefaultEndpointsProtocol=https;AccountName=@{linkedService().account};EndpointSuffix=core.windows.net;",
+			"accountKey": {
+				"type": "AzureKeyVaultSecret",
+				"store": {
+					"referenceName": "GEN_LSER_Keyvault",
+					"type": "LinkedServiceReference",
+					"parameters": {
+						"url": {
+							"value": "@linkedService().keyvault_url",
+							"type": "Expression"
+						}
+					}
+				},
+				"secretName": {
+					"value": "@linkedService().key",
+					"type": "Expression"
+				}
+			}
+		},
+		"connectVia": {
+			"referenceName": "IR-BIBA-ONCLOUD-Central",
+			"type": "IntegrationRuntimeReference"
+		}
+	}
+}

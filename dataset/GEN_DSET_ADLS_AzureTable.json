@@ -1,0 +1,61 @@
+{
+	"name": "GEN_DSET_ADLS_AzureTable",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "GEN_LSER_AzureTableStorage",
+			"type": "LinkedServiceReference",
+			"parameters": {
+				"url": {
+					"value": "@dataset().url",
+					"type": "Expression"
+				},
+				"key": {
+					"value": "@dataset().key",
+					"type": "Expression"
+				},
+				"keyvault_url": {
+					"value": "@dataset().keyvault_url",
+					"type": "Expression"
+				},
+				"account": {
+					"value": "@dataset().account",
+					"type": "Expression"
+				}
+			}
+		},
+		"parameters": {
+			"TableName": {
+				"type": "string"
+			},
+			"url": {
+				"type": "string",
+				"defaultValue": "https://storbibanp2.dfs.core.windows.net"
+			},
+			"key": {
+				"type": "string",
+				"defaultValue": "secret-storageaccount-key1"
+			},
+			"keyvault_url": {
+				"type": "string",
+				"defaultValue": "https://Kvl-BIBA-Np.vault.azure.net/"
+			},
+			"account": {
+				"type": "string",
+				"defaultValue": "storbibanp2"
+			}
+		},
+		"folder": {
+			"name": "General"
+		},
+		"annotations": [],
+		"type": "AzureTable",
+		"schema": [],
+		"typeProperties": {
+			"tableName": {
+				"value": "@dataset().TableName",
+				"type": "Expression"
+			}
+		}
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

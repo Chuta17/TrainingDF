@@ -1,0 +1,58 @@
+{
+	"name": "GEN_LSER_SQLServer",
+	"type": "Microsoft.DataFactory/factories/linkedservices",
+	"properties": {
+		"description": "Linked service generico que permite conectar a un servidor sql con (IR-Connect-OnPrem-BIBA-Np)",
+		"parameters": {
+			"server": {
+				"type": "string",
+				"defaultValue": "QUINUA\\GITD,54083"
+			},
+			"database": {
+				"type": "string",
+				"defaultValue": "CS"
+			},
+			"user": {
+				"type": "string",
+				"defaultValue": "consorciosalud\\USUSVBIBA"
+			},
+			"password": {
+				"type": "string",
+				"defaultValue": "secret-quinuaserver-dev-password"
+			},
+			"keyvault_url": {
+				"type": "string",
+				"defaultValue": "https://Kvl-BIBA-Np.vault.azure.net/"
+			}
+		},
+		"annotations": [
+			"Linked service generico que permite conectar a un servidor sql con (IR-Connect-OnPrem-BIBA-Np)"
+		],
+		"type": "SqlServer",
+		"typeProperties": {
+			"connectionString": "Integrated Security=True;Data Source=@{linkedService().server};Initial Catalog=@{linkedService().database};Packet Size=32767",
+			"userName": "@{linkedService().user}",
+			"password": {
+				"type": "AzureKeyVaultSecret",
+				"store": {
+					"referenceName": "GEN_LSER_Keyvault",
+					"type": "LinkedServiceReference",
+					"parameters": {
+						"url": {
+							"value": "@linkedService().keyvault_url",
+							"type": "Expression"
+						}
+					}
+				},
+				"secretName": {
+					"value": "@linkedService().password",
+					"type": "Expression"
+				}
+			}
+		},
+		"connectVia": {
+			"referenceName": "IR-BIBA-ONPREMDATA",
+			"type": "IntegrationRuntimeReference"
+		}
+	}
+}

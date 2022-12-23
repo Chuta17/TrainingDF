@@ -1,0 +1,60 @@
+{
+	"name": "GEN_PLIN_SendMail",
+	"properties": {
+		"activities": [
+			{
+				"name": "Logic App",
+				"type": "WebActivity",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"url": {
+						"value": "@pipeline().parameters.Url",
+						"type": "Expression"
+					},
+					"method": "POST",
+					"headers": {
+						"Content-Type": "application/json"
+					},
+					"body": {
+						"DataFactoryName": "@{pipeline().DataFactory}",
+						"PipelineName": "@{pipeline().Pipeline}",
+						"Subject": "@{pipeline().parameters.Subject}",
+						"ErrorMessage": "@{pipeline().parameters.ErrorMessage}",
+						"EmailTo": "@pipeline().parameters.EmailTo"
+					}
+				}
+			}
+		],
+		"parameters": {
+			"EmailTo": {
+				"type": "string",
+				"defaultValue": "smora@ultracom.com"
+			},
+			"Subject": {
+				"type": "string",
+				"defaultValue": "Mnesaje"
+			},
+			"ErrorMessage": {
+				"type": "string"
+			},
+			"Url": {
+				"type": "string",
+				"defaultValue": "https://prod-36.eastus2.logic.azure.com:443/workflows/90cf2c2990654eeeb6371e6a2d9f58fb/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=nOLrGBWjgYDY41COafYu5SDeikXXfFFJPPkHJs7lKT0"
+			}
+		},
+		"folder": {
+			"name": "General"
+		},
+		"annotations": [],
+		"lastPublishTime": "2022-08-30T16:34:41Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

@@ -1,0 +1,76 @@
+{
+	"name": "GEN_DSET_Synapse",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "GEN_LSER_Synapse",
+			"type": "LinkedServiceReference",
+			"parameters": {
+				"keyvault_url": {
+					"value": "@dataset().keyvault_url",
+					"type": "Expression"
+				},
+				"domain": {
+					"value": "@dataset().domain",
+					"type": "Expression"
+				},
+				"database": {
+					"value": "@dataset().database",
+					"type": "Expression"
+				},
+				"user": {
+					"value": "@dataset().user",
+					"type": "Expression"
+				},
+				"password": {
+					"value": "@dataset().password",
+					"type": "Expression"
+				}
+			}
+		},
+		"parameters": {
+			"Schema": {
+				"type": "string"
+			},
+			"TableName": {
+				"type": "string"
+			},
+			"database": {
+				"type": "string",
+				"defaultValue": "Syn-BIBA-Np"
+			},
+			"domain": {
+				"type": "string",
+				"defaultValue": "sql-dwh-eureka.database.windows.net"
+			},
+			"keyvault_url": {
+				"type": "string",
+				"defaultValue": "https://Kvl-BIBA-Np.vault.azure.net/"
+			},
+			"password": {
+				"type": "string",
+				"defaultValue": "secret-synbibanp-dev-password"
+			},
+			"user": {
+				"type": "string",
+				"defaultValue": "bibaEureka"
+			}
+		},
+		"folder": {
+			"name": "General"
+		},
+		"annotations": [],
+		"type": "AzureSqlDWTable",
+		"schema": [],
+		"typeProperties": {
+			"schema": {
+				"value": "@dataset().Schema",
+				"type": "Expression"
+			},
+			"table": {
+				"value": "@dataset().TableName",
+				"type": "Expression"
+			}
+		}
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

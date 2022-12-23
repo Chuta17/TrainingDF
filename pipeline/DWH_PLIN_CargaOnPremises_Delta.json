@@ -1,0 +1,215 @@
+{
+	"name": "DWH_PLIN_CargaOnPremises_Delta",
+	"properties": {
+		"activities": [
+			{
+				"name": "GetConfig",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "SetNewLoadDate",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureTableSource",
+						"azureTableSourceQuery": {
+							"value": "PartitionKey eq '@{pipeline().parameters.LoadConfiguration}' @{if(equals(coalesce(pipeline().parameters.LoadTable,''),''),'', concat(' and RowKey eq ''', pipeline().parameters.LoadTable, '''') ) }",
+							"type": "Expression"
+						},
+						"azureTableSourceIgnoreTableNotFound": false
+					},
+					"dataset": {
+						"referenceName": "GEN_DSET_ADLS_AzureTable",
+						"type": "DatasetReference",
+						"parameters": {
+							"TableName": {
+								"value": "@pipeline().parameters.configurationTableName",
+								"type": "Expression"
+							},
+							"url": {
+								"value": "@pipeline().globalParameters.storage_url",
+								"type": "Expression"
+							},
+							"key": {
+								"value": "@pipeline().globalParameters.secret_storage_key",
+								"type": "Expression"
+							},
+							"keyvault_url": {
+								"value": "@pipeline().globalParameters.keyvault_url",
+								"type": "Expression"
+							},
+							"account": {
+								"value": "@pipeline().parameters.storageAccount",
+								"type": "Expression"
+							}
+						}
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "ExecuteLoad",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "GetConfig",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "DWH_PLIN_CargaOnPremises_CargaTablasDelta",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"tables": {
+							"value": "@activity('GetConfig').output.value",
+							"type": "Expression"
+						},
+						"container": {
+							"value": "@pipeline().parameters.Container",
+							"type": "Expression"
+						},
+						"NewLoadDate": {
+							"value": "@variables('NewLoadDate')",
+							"type": "Expression"
+						},
+						"partitionNotebookPath": {
+							"value": "@pipeline().parameters.partitionNotebookPath",
+							"type": "Expression"
+						},
+						"EmailTo": {
+							"value": "@pipeline().parameters.EmailTo",
+							"type": "Expression"
+						},
+						"DifferentialNotebookPath": {
+							"value": "@pipeline().parameters.DifferentialNotebookPath",
+							"type": "Expression"
+						},
+						"NoPartitionNotebookPath": {
+							"value": "@pipeline().parameters.NoPartitionNotebookPath",
+							"type": "Expression"
+						},
+						"FromEmail": {
+							"value": "@pipeline().parameters.FromEmail",
+							"type": "Expression"
+						},
+						"LoadConfiguration": {
+							"value": "@pipeline().parameters.LoadConfiguration",
+							"type": "Expression"
+						},
+						"checkSumNotebookPath": {
+							"value": "@pipeline().parameters.checkSumNotebookPath",
+							"type": "Expression"
+						},
+						"enviroment": {
+							"value": "@pipeline().globalParameters.branch",
+							"type": "Expression"
+						},
+						"configurationTableName": {
+							"value": "@pipeline().parameters.configurationTableName",
+							"type": "Expression"
+						},
+						"storageAccount": {
+							"value": "@pipeline().parameters.storageAccount",
+							"type": "Expression"
+						},
+						"checksumModulus": {
+							"value": "@pipeline().parameters.checksumModulus",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "SetNewLoadDate",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "NewLoadDate",
+					"value": {
+						"value": "@convertTimeZone(utcnow(),'UTC','SA Pacific Standard Time','yyyy-MM-ddTHH:mm:ss.fffffffK')",
+						"type": "Expression"
+					}
+				}
+			}
+		],
+		"parameters": {
+			"LoadConfiguration": {
+				"type": "string",
+				"defaultValue": "QUINUA_GITD_COMRIC_L"
+			},
+			"Container": {
+				"type": "string",
+				"defaultValue": "stage"
+			},
+			"partitionNotebookPath": {
+				"type": "string",
+				"defaultValue": "/Utils/DifferentialLoadDelta/01_FirstLoadPartitioning"
+			},
+			"EmailTo": {
+				"type": "string",
+				"defaultValue": "fangarita@ultracom.com.co"
+			},
+			"LoadTable": {
+				"type": "string"
+			},
+			"DifferentialNotebookPath": {
+				"type": "string",
+				"defaultValue": "/Utils/DifferentialLoadDelta/02_DifferentialLoad"
+			},
+			"NoPartitionNotebookPath": {
+				"type": "string",
+				"defaultValue": "/Utils/DifferentialLoadDelta/01_NoPartitioning"
+			},
+			"FromEmail": {
+				"type": "string",
+				"defaultValue": "NOTIFICACIONESBIBA@compensarsalud.com"
+			},
+			"checkSumNotebookPath": {
+				"type": "string",
+				"defaultValue": "/Utils/DifferentialLoadDelta/03_CalculateColumnChecksum"
+			},
+			"configurationTableName": {
+				"type": "string",
+				"defaultValue": "ConfiguracionCargaV3"
+			},
+			"storageAccount": {
+				"type": "string",
+				"defaultValue": "storbibanp2"
+			},
+			"checksumModulus": {
+				"type": "string",
+				"defaultValue": "50000"
+			}
+		},
+		"variables": {
+			"NewLoadDate": {
+				"type": "String"
+			}
+		},
+		"folder": {
+			"name": "MOD_DWH/CargaOnPremises"
+		},
+		"annotations": [],
+		"lastPublishTime": "2022-08-30T16:35:29Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

@@ -1,0 +1,12 @@
+{
+	"name": "IR-BIBA-ONPREMDATA",
+	"properties": {
+		"type": "SelfHosted",
+		"typeProperties": {
+			"linkedInfo": {
+				"resourceId": "/subscriptions/b9b5ed56-f7f9-4fc8-b32d-c15ae863d53a/resourcegroups/BIBA-Prod-RG/providers/Microsoft.DataFactory/factories/df-gestiondatabiba-pro/integrationruntimes/IR-BIBA-ONPREMDATA-PRO",
+				"authorizationType": "Rbac"
+			}
+		}
+	}
+}

@@ -1,0 +1,54 @@
+{
+	"name": "GEN_LSER_Databricks_Engineer",
+	"type": "Microsoft.DataFactory/factories/linkedservices",
+	"properties": {
+		"description": "Linked Service generico para conectar a cualquier Databricks",
+		"parameters": {
+			"url": {
+				"type": "string",
+				"defaultValue": "https://adb-6392399124865451.11.azuredatabricks.net"
+			},
+			"token": {
+				"type": "string",
+				"defaultValue": "secret-databricksbibanpdbw-dev-token"
+			},
+			"cluster_id": {
+				"type": "string",
+				"defaultValue": "1030-135624-flume12"
+			},
+			"keyvault_url": {
+				"type": "string",
+				"defaultValue": "https://Kvl-BIBA-Np.vault.azure.net/"
+			}
+		},
+		"annotations": [
+			"Linked Service generico para conectar a cualquier Databricks"
+		],
+		"type": "AzureDatabricks",
+		"typeProperties": {
+			"domain": "@linkedService().url",
+			"accessToken": {
+				"type": "AzureKeyVaultSecret",
+				"store": {
+					"referenceName": "GEN_LSER_Keyvault",
+					"type": "LinkedServiceReference",
+					"parameters": {
+						"url": {
+							"value": "@linkedService().keyvault_url",
+							"type": "Expression"
+						}
+					}
+				},
+				"secretName": {
+					"value": "@linkedService().token",
+					"type": "Expression"
+				}
+			},
+			"existingClusterId": "@linkedService().cluster_id"
+		},
+		"connectVia": {
+			"referenceName": "IR-BIBA-ONCLOUD-Central",
+			"type": "IntegrationRuntimeReference"
+		}
+	}
+}

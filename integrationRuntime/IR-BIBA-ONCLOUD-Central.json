@@ -1,0 +1,18 @@
+{
+	"name": "IR-BIBA-ONCLOUD-Central",
+	"properties": {
+		"type": "Managed",
+		"description": "Se utilizara para realizar conexiones sobre el ADLS",
+		"typeProperties": {
+			"computeProperties": {
+				"location": "Central US",
+				"dataFlowProperties": {
+					"computeType": "General",
+					"coreCount": 8,
+					"timeToLive": 10,
+					"cleanup": false
+				}
+			}
+		}
+	}
+}

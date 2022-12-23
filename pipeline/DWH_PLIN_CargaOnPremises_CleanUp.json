@@ -1,0 +1,162 @@
+{
+	"name": "DWH_PLIN_CargaOnPremises_CleanUp",
+	"properties": {
+		"activities": [
+			{
+				"name": "DeletePartitionedStage",
+				"type": "Delete",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"dataset": {
+						"referenceName": "GEN_DSET_ADLSBinary",
+						"type": "DatasetReference",
+						"parameters": {
+							"container": {
+								"value": "@pipeline().parameters.container",
+								"type": "Expression"
+							},
+							"path": {
+								"value": "LZ/Database/@{pipeline().parameters.TableConfig.ServerNameDL}/@{if(equals(pipeline().parameters.TableConfig.newDatabaseName,''),pipeline().parameters.TableConfig.sourceDatabaseName,pipeline().parameters.TableConfig.newDatabaseName)}/@{pipeline().parameters.TableConfig.newSchema}/stage_@{replace(pipeline().parameters.TableConfig.newTableName,' ','_')}/",
+								"type": "Expression"
+							},
+							"url": {
+								"value": "@pipeline().globalParameters.storage_url",
+								"type": "Expression"
+							},
+							"key": {
+								"value": "@pipeline().globalParameters.secret_storage_key",
+								"type": "Expression"
+							},
+							"keyvault_url": {
+								"value": "@pipeline().globalParameters.keyvault_url",
+								"type": "Expression"
+							}
+						}
+					},
+					"enableLogging": false,
+					"storeSettings": {
+						"type": "AzureBlobFSReadSettings",
+						"recursive": true,
+						"enablePartitionDiscovery": false
+					}
+				}
+			},
+			{
+				"name": "DeletePartitionedDifferential",
+				"type": "Delete",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"dataset": {
+						"referenceName": "GEN_DSET_ADLSBinary",
+						"type": "DatasetReference",
+						"parameters": {
+							"container": {
+								"value": "@pipeline().parameters.container",
+								"type": "Expression"
+							},
+							"path": {
+								"value": "LZ/Database/@{pipeline().parameters.TableConfig.ServerNameDL}/@{if(equals(pipeline().parameters.TableConfig.newDatabaseName,''),pipeline().parameters.TableConfig.sourceDatabaseName,pipeline().parameters.TableConfig.newDatabaseName)}/@{pipeline().parameters.TableConfig.newSchema}/Differential_@{replace(pipeline().parameters.TableConfig.newTableName,' ','_')}/",
+								"type": "Expression"
+							},
+							"url": {
+								"value": "@pipeline().globalParameters.storage_url",
+								"type": "Expression"
+							},
+							"key": {
+								"value": "@pipeline().globalParameters.secret_storage_key",
+								"type": "Expression"
+							},
+							"keyvault_url": {
+								"value": "@pipeline().globalParameters.keyvault_url",
+								"type": "Expression"
+							}
+						}
+					},
+					"enableLogging": false,
+					"storeSettings": {
+						"type": "AzureBlobFSReadSettings",
+						"recursive": true,
+						"enablePartitionDiscovery": false
+					}
+				}
+			},
+			{
+				"name": "DeletePartitionedStageDelete",
+				"type": "Delete",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"dataset": {
+						"referenceName": "GEN_DSET_ADLSBinary",
+						"type": "DatasetReference",
+						"parameters": {
+							"container": {
+								"value": "@pipeline().parameters.container",
+								"type": "Expression"
+							},
+							"path": {
+								"value": "LZ/Database/@{pipeline().parameters.TableConfig.ServerNameDL}/@{if(equals(pipeline().parameters.TableConfig.newDatabaseName,''),pipeline().parameters.TableConfig.sourceDatabaseName,pipeline().parameters.TableConfig.newDatabaseName)}/@{pipeline().parameters.TableConfig.newSchema}/stageDelete_@{replace(pipeline().parameters.TableConfig.newTableName,' ','_')}/",
+								"type": "Expression"
+							},
+							"url": {
+								"value": "@pipeline().globalParameters.storage_url",
+								"type": "Expression"
+							},
+							"key": {
+								"value": "@pipeline().globalParameters.secret_storage_key",
+								"type": "Expression"
+							},
+							"keyvault_url": {
+								"value": "@pipeline().globalParameters.keyvault_url",
+								"type": "Expression"
+							}
+						}
+					},
+					"enableLogging": false,
+					"storeSettings": {
+						"type": "AzureBlobFSReadSettings",
+						"recursive": true,
+						"enablePartitionDiscovery": false
+					}
+				}
+			}
+		],
+		"parameters": {
+			"container": {
+				"type": "string"
+			},
+			"TableConfig": {
+				"type": "object"
+			}
+		},
+		"folder": {
+			"name": "MOD_DWH/CargaOnPremises"
+		},
+		"annotations": [],
+		"lastPublishTime": "2022-08-30T16:34:53Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

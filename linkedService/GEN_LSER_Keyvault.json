@@ -1,0 +1,20 @@
+{
+	"name": "GEN_LSER_Keyvault",
+	"type": "Microsoft.DataFactory/factories/linkedservices",
+	"properties": {
+		"description": "Linked Service generico que conecta cualquier recurso de Key Vault",
+		"parameters": {
+			"url": {
+				"type": "string",
+				"defaultValue": "https://kvl-biba-np.vault.azure.net/"
+			}
+		},
+		"annotations": [
+			"Linked Service generico que conecta cualquier recurso de Key Vault"
+		],
+		"type": "AzureKeyVault",
+		"typeProperties": {
+			"baseUrl": "@{linkedService().url}"
+		}
+	}
+}

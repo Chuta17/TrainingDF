@@ -1,0 +1,2149 @@
+{
+	"name": "DWH_PLIN_CargaOnPremises_CargaTabla",
+	"properties": {
+		"activities": [
+			{
+				"name": "columnNoSpaces",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SqlServerSource",
+						"sqlReaderQuery": {
+							"value": "declare @schemaName nvarchar(128) = '@{pipeline().parameters.TableConfig.schemaName}'\ndeclare @tableName nvarchar(128) = '@{pipeline().parameters.TableConfig.tableName}'\n\ndeclare @columnList varchar(max) =''\n\n;With conversionTable as(\n\tSELECT cast(SourceType as nvarchar(128)) as SourceType, cast(TargetType as nvarchar(128)) as TargetType FROM (VALUES \n\t('numeric', 'decimal'),\n\t('tinyint', 'int'),\n\t('sysname', 'nvarchar'),\n\t('xml', 'varchar'),\n\t('uniqueidentifier', 'char'),\n\t('timestamp','datetime')\n\t) AS Conversion(SourceType, TargetType)\n)\n, Columninfo as (\nSELECT distinct \n    c.name ColumnName\n    ,ISNULL(ct.TargetType,t.[Name]) as Datatype\n\t,c.column_id\n\t,case \n\t\twhen ct.TargetType='numeric' or ct.TargetType='decimal' or t.[Name]='decimal' then concat('(',c.precision,',',c.scale,')')\n\t\twhen t.[Name] in ('nvarchar','varchar','nchar', 'xml','char','binary','varbinary','uniqueidentifier') then concat('(',\n\t\t\tcase \n\t\t\t\twhen t.[Name]='xml' then 'max'\n\t\t\t\twhen t.[Name]='uniqueidentifier' then '36'\n\t\t\t\twhen t.[Name]='varchar' and c.max_length\t=-1 then '8000'\n\t\t\t\twhen t.[Name]='nvarchar' and c.max_length\t=-1 then '4000'\n\t\t\t\twhen t.[Name]='nvarchar' or t.[Name]='nchar' and c.max_length\t>-1 then cast(c.max_length\t/2 as varchar(50))\n\t\t\t\telse\n\t\t\t\t\tcast(c.max_length as varchar(50))\n\t\t\tEnd\t\t\n\t\t,')')\n\telse ''\n\tend as PSL\nFROM    \n    sys.columns c\nINNER JOIN \n    sys.types t ON c.user_type_id = t.user_type_id\nLEFT OUTER JOIN \n\tconversionTable ct ON t.[name] = ct.SourceType\nLEFT OUTER JOIN \n    sys.index_columns ic ON ic.object_id = c.object_id AND ic.column_id = c.column_id\nLEFT OUTER JOIN \n    sys.indexes i ON ic.object_id = i.object_id AND ic.index_id = i.index_id\nWHERE\n    c.object_id = OBJECT_ID(concat(quotename(@schemaName),'.',QUOTENAME(@tableName)))\n)\nselect \n@columnList =coalesce(@columnList +',cast('+ concat(quotename(ColumnName),' as ',quotename(Datatype), PSL, ') as ', quotename(replace(replace(replace(replace(replace(replace(Replace(REPLACE(REPLACE(replace(replace(REPLACE(REPLACE(REPLACE(replace(replace(ColumnName,'.',''),',',''),';',''),'{',''),'}',''),'(',''),')',''),'=',''),'á','a'),'é','e'),'í','i'),'ó','o'),'ú','u'),'ñ','n'),'ü','u'),' ' ,''))),\n                                             concat(quotename(ColumnName),' as ',quotename(Datatype), PSL, ') as ', quotename(replace(replace(replace(replace(replace(replace(Replace(REPLACE(REPLACE(replace(replace(REPLACE(REPLACE(REPLACE(replace(replace(ColumnName,'.',''),',',''),';',''),'{',''),'}',''),'(',''),')',''),'=',''),'á','a'),'é','e'),'í','i'),'ó','o'),'ú','u'),'ñ','n'),'ü','u'),' ' ,'')))) \nfrom Columninfo\norder by column_id\n\nselect substring(@columnList,2,2147483647) as CF",
+							"type": "Expression"
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "GEN_DSET_SQLServer_QuinuaGITD",
+						"type": "DatasetReference",
+						"parameters": {
+							"serverName": {
+								"value": "@{pipeline().parameters.TableConfig.sourceServerName}",
+								"type": "Expression"
+							},
+							"databaseName": {
+								"value": "@{pipeline().parameters.TableConfig.sourceDatabaseName}",
+								"type": "Expression"
+							},
+							"user": {
+								"value": "@pipeline().globalParameters.quinuagitd_user",
+								"type": "Expression"
+							},
+							"password": {
+								"value": "@pipeline().globalParameters.secret_quinuagitd_psswd",
+								"type": "Expression"
+							},
+							"keyvault_url": {
+								"value": "@pipeline().globalParameters.keyvault_url",
+								"type": "Expression"
+							}
+						}
+					}
+				}
+			},
+			{
+				"name": "IfLastModificationDS_DIfferentialPartition",
+				"description": "if DifferentialPattern == \"LastModification\"\nand DifferentialStrategy == \"DifferentialPartition\" \nand PartitionExpressionSQL != \"\"",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "LastModificationDifferentialPartition",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@and(and(equals(pipeline().parameters.TableConfig.DifferentialPattern,'LastModification'),equals(pipeline().parameters.TableConfig.DifferentialStrategy,'DifferentialPartition')),not(equals(coalesce(pipeline().parameters.TableConfig.PartitionExpressionSQL,''),'')))",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "SetLM_DifferentialPartition",
+							"type": "SetVariable",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "LastModificationQuery",
+								"value": {
+									"value": "declare @lastLoad datetime = convert(datetime, left('@{pipeline().parameters.TableConfig.LastLoad}',19),127)\n\nSELECT *, checksum(*) as _checksum FROM \n\t(\n\t\tselect @{activity('columnNoSpaces').output.firstRow.CF} from @{pipeline().parameters.TableConfig.RowKey} as ST \n\t\tinner join \n\t\t\t(select distinct @{pipeline().parameters.TableConfig.PartitionExpressionSQL} as _PartitionExpression from\n\t\t\t\t@{pipeline().parameters.TableConfig.RowKey} as ST\n\t\t\t\twhere @{pipeline().parameters.TableConfig.LastModificationFilter}\n\t\t\t) as DF\n\t\ton @{pipeline().parameters.TableConfig.PartitionExpressionSQL} = DF._PartitionExpression\n\t) AS ST\n",
+									"type": "Expression"
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "IfLastModificationDS_KeyValue",
+				"description": "if DifferentialPattern == \"LastModification\"\nand DifferentialStrategy == \"KeyValue\" \nand PartitionExpressionSQL != \"\"",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "LastModificationDifferentialPartition",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@and(and(equals(pipeline().parameters.TableConfig.DifferentialPattern,'LastModification'),equals(pipeline().parameters.TableConfig.DifferentialStrategy,'KeyValue')),not(equals(coalesce(pipeline().parameters.TableConfig.PartitionExpressionSQL,''),'')))",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "SetLM_KeyValue",
+							"type": "SetVariable",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "LastModificationQuery",
+								"value": {
+									"value": "declare @lastLoad datetime = convert(datetime, left('@{pipeline().parameters.TableConfig.LastLoad}',19),127)\n\nselect * , checksum(*) as _checksum\nfrom ( \n\tselect @{activity('columnNoSpaces').output.firstRow.CF} from @{pipeline().parameters.TableConfig.RowKey} as ST \n\twhere exists (select * from @{pipeline().parameters.TableConfig.RowKey} as DF where @{pipeline().parameters.TableConfig.LastModificationFilter} \n\tand ST.@{pipeline().parameters.TableConfig.TableUniqueKeys} = DF.@{pipeline().parameters.TableConfig.TableUniqueKeys})\n) as ST",
+									"type": "Expression"
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "LastModificationDifferentialPartition",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "columnNoSpaces",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "LastModificationQuery",
+					"value": {
+						"value": "declare @lastLoad datetime = convert(datetime, left('@{pipeline().parameters.TableConfig.LastLoad}',19),127)\n\nselect *, checksum(*) as _checksum\nfrom (\nselect @{activity('columnNoSpaces').output.firstRow.CF} from @{pipeline().parameters.TableConfig.RowKey} as ST \ninner join \n\t(select distinct @{pipeline().parameters.TableConfig.PartitionExpressionSQL} as _PartitionExpression from\n\t\t@{pipeline().parameters.TableConfig.RowKey} as ST\n\t\twhere @{pipeline().parameters.TableConfig.LastModificationFilter}\n\t) as DF\non @{pipeline().parameters.TableConfig.PartitionExpressionSQL} = DF._PartitionExpression\n) as ST",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "IfLastModification",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "CleanUpStage_Precopy",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@equals(pipeline().parameters.TableConfig.DifferentialPattern,'LastModification')",
+						"type": "Expression"
+					},
+					"ifFalseActivities": [
+						{
+							"name": "ReadDataFromSource",
+							"type": "Copy",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 1,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "SqlServerSource",
+									"sqlReaderQuery": {
+										"value": "@variables('LoadQuery')",
+										"type": "Expression"
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"sink": {
+									"type": "ParquetSink",
+									"storeSettings": {
+										"type": "AzureBlobFSWriteSettings"
+									},
+									"formatSettings": {
+										"type": "ParquetWriteSettings"
+									}
+								},
+								"enableStaging": false,
+								"parallelCopies": 8,
+								"validateDataConsistency": true,
+								"dataIntegrationUnits": 2
+							},
+							"inputs": [
+								{
+									"referenceName": "GEN_DSET_SQLServer_QuinuaGITD",
+									"type": "DatasetReference",
+									"parameters": {
+										"serverName": {
+											"value": "@{pipeline().parameters.TableConfig.sourceServerName}",
+											"type": "Expression"
+										},
+										"databaseName": {
+											"value": "@{pipeline().parameters.TableConfig.sourceDatabaseName}",
+											"type": "Expression"
+										},
+										"user": {
+											"value": "@pipeline().globalParameters.quinuagitd_user",
+											"type": "Expression"
+										},
+										"password": {
+											"value": "@pipeline().globalParameters.secret_quinuagitd_psswd",
+											"type": "Expression"
+										},
+										"keyvault_url": {
+											"value": "@pipeline().globalParameters.keyvault_url",
+											"type": "Expression"
+										}
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "GEN_DSET_ADLS_Parquet",
+									"type": "DatasetReference",
+									"parameters": {
+										"container": {
+											"value": "@pipeline().parameters.container",
+											"type": "Expression"
+										},
+										"path": {
+											"value": "LZ/Database/@{pipeline().parameters.TableConfig.ServerNameDL}/@{if(equals(pipeline().parameters.TableConfig.newDatabaseName,''),pipeline().parameters.TableConfig.sourceDatabaseName,pipeline().parameters.TableConfig.newDatabaseName)}/@{pipeline().parameters.TableConfig.newSchema}/stage_@{replace(pipeline().parameters.TableConfig.newTableName,' ','_')}/",
+											"type": "Expression"
+										},
+										"url": {
+											"value": "@pipeline().globalParameters.storage_url",
+											"type": "Expression"
+										},
+										"key": {
+											"value": "@pipeline().globalParameters.secret_storage_key",
+											"type": "Expression"
+										},
+										"keyvault_url": {
+											"value": "@pipeline().globalParameters.keyvault_url",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						}
+					],
+					"ifTrueActivities": [
+						{
+							"name": "ReadDataFromSourceLM",
+							"type": "Copy",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 1,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "SqlServerSource",
+									"sqlReaderQuery": {
+										"value": "@variables('LastModificationQuery')",
+										"type": "Expression"
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"sink": {
+									"type": "ParquetSink",
+									"storeSettings": {
+										"type": "AzureBlobFSWriteSettings"
+									},
+									"formatSettings": {
+										"type": "ParquetWriteSettings"
+									}
+								},
+								"enableStaging": false,
+								"parallelCopies": 8,
+								"validateDataConsistency": true,
+								"dataIntegrationUnits": 2
+							},
+							"inputs": [
+								{
+									"referenceName": "GEN_DSET_SQLServer_QuinuaGITD",
+									"type": "DatasetReference",
+									"parameters": {
+										"serverName": {
+											"value": "@{pipeline().parameters.TableConfig.sourceServerName}",
+											"type": "Expression"
+										},
+										"databaseName": {
+											"value": "@{pipeline().parameters.TableConfig.sourceDatabaseName}",
+											"type": "Expression"
+										},
+										"user": {
+											"value": "@pipeline().globalParameters.quinuagitd_user",
+											"type": "Expression"
+										},
+										"password": {
+											"value": "@pipeline().globalParameters.secret_quinuagitd_psswd",
+											"type": "Expression"
+										},
+										"keyvault_url": {
+											"value": "@pipeline().globalParameters.keyvault_url",
+											"type": "Expression"
+										}
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "GEN_DSET_ADLS_Parquet",
+									"type": "DatasetReference",
+									"parameters": {
+										"container": {
+											"value": "@pipeline().parameters.container",
+											"type": "Expression"
+										},
+										"path": {
+											"value": "LZ/Database/@{pipeline().parameters.TableConfig.ServerNameDL}/@{if(equals(pipeline().parameters.TableConfig.newDatabaseName,''),pipeline().parameters.TableConfig.sourceDatabaseName,pipeline().parameters.TableConfig.newDatabaseName)}/@{pipeline().parameters.TableConfig.newSchema}/stage_@{replace(pipeline().parameters.TableConfig.newTableName,' ','_')}/",
+											"type": "Expression"
+										},
+										"url": {
+											"value": "@pipeline().globalParameters.storage_url",
+											"type": "Expression"
+										},
+										"key": {
+											"value": "@pipeline().globalParameters.secret_storage_key",
+											"type": "Expression"
+										},
+										"keyvault_url": {
+											"value": "@pipeline().globalParameters.keyvault_url",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						}
+					]
+				}
+			},
+			{
+				"name": "NoPartitionBackInTimeFullLoadQuery",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "columnNoSpaces",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "LoadQuery",
+					"value": {
+						"value": "select *, checksum(*) as _checksum\nfrom ( select \n@{activity('columnNoSpaces').output.firstRow.CF}  from @{pipeline().parameters.TableConfig.RowKey} @{if(equals(coalesce(pipeline().parameters.TableConfig.LoadFilter,''),''), '', concat(' where ' , pipeline().parameters.TableConfig.LoadFilter))}\n) as ST",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "IfPartitionBackInTimeFull",
+				"description": "if DifferentialPattern != \"LastModification\"\nand PartitionExpressionSQL != \"\"",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "NoPartitionBackInTimeFullLoadQuery",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@and(not(equals(pipeline().parameters.TableConfig.DifferentialPattern,'LastModification')),not(equals(coalesce(pipeline().parameters.TableConfig.PartitionExpressionSQL,''),'')))",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "NoPartitionBackInTimeFullLoadQuery_copy1",
+							"type": "SetVariable",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "LoadQuery",
+								"value": {
+									"value": "SELECT *, checksum(*) as _checksum FROM \n\t(\n\tselect @{activity('columnNoSpaces').output.firstRow.CF}  \n\tfrom @{pipeline().parameters.TableConfig.RowKey} @{if(equals(coalesce(pipeline().parameters.TableConfig.LoadFilter,''),''), '', concat(' where ' , pipeline().parameters.TableConfig.LoadFilter))}\n\n\t) as ST",
+									"type": "Expression"
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "IfIsNotPartitioned",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "IfCleanupIfFullLoad",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@equals(coalesce(pipeline().parameters.TableConfig.PartitionExpressionSpark,''),'')",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "DeltaNoPartition",
+							"type": "DatabricksNotebook",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"notebookPath": {
+									"value": "/@{pipeline().parameters.enviroment}@{pipeline().parameters.NoPartitionNotebookPath}",
+									"type": "Expression"
+								},
+								"baseParameters": {
+									"Path": {
+										"value": "LZ/Database/@{pipeline().parameters.TableConfig.ServerNameDL}/",
+										"type": "Expression"
+									},
+									"TableName": {
+										"value": "@{replace(pipeline().parameters.TableConfig.newTableName,' ','_')}",
+										"type": "Expression"
+									},
+									"FormatToWrite": "delta",
+									"DatabaseName": {
+										"value": "@{pipeline().parameters.TableConfig.newDatabaseName}",
+										"type": "Expression"
+									},
+									"TableSchemaName": {
+										"value": "@{pipeline().parameters.TableConfig.newSchema}",
+										"type": "Expression"
+									}
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "GEN_LSER_Databricks_Engineer",
+								"type": "LinkedServiceReference",
+								"parameters": {
+									"url": {
+										"value": "@pipeline().globalParameters.databricks_url",
+										"type": "Expression"
+									},
+									"token": {
+										"value": "@pipeline().globalParameters.secret_databricks_token",
+										"type": "Expression"
+									},
+									"cluster_id": {
+										"value": "@pipeline().globalParameters.databricks_cluster_eng",
+										"type": "Expression"
+									},
+									"keyvault_url": {
+										"value": "@pipeline().globalParameters.keyvault_url",
+										"type": "Expression"
+									}
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "IfIsPartitionedAndFullLoad",
+				"description": "If DifferentialPattern == \"FullLoad\" and PartitionExpressionSpark != \"\"",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "IfCleanupIfFullLoad",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@and(equals(pipeline().parameters.TableConfig.DifferentialPattern,'FullLoad'),not(equals(coalesce(pipeline().parameters.TableConfig.PartitionExpressionSpark,''),'')))\n\n\n",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "DeltaPartition",
+							"type": "DatabricksNotebook",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"notebookPath": {
+									"value": "/@{pipeline().parameters.enviroment}@{pipeline().parameters.partitionNotebookPath}",
+									"type": "Expression"
+								},
+								"baseParameters": {
+									"Path": {
+										"value": "LZ/Database/@{pipeline().parameters.TableConfig.ServerNameDL}/",
+										"type": "Expression"
+									},
+									"TableName": {
+										"value": "@{replace(pipeline().parameters.TableConfig.newTableName,' ','_')}",
+										"type": "Expression"
+									},
+									"partitionColumn": {
+										"value": "@{if(empty(pipeline().parameters.TableConfig.partitionColumn),'',pipeline().parameters.TableConfig.partitionColumn)}",
+										"type": "Expression"
+									},
+									"FormatToWrite": "delta",
+									"PartitionExpressionSpark": {
+										"value": "@{pipeline().parameters.TableConfig.PartitionExpressionSpark}",
+										"type": "Expression"
+									},
+									"PartitionColumnSpark": {
+										"value": "@{pipeline().parameters.TableConfig.PartitionColumnSpark}",
+										"type": "Expression"
+									},
+									"TableSize": {
+										"value": "@{pipeline().parameters.TableConfig.TableSize}",
+										"type": "Expression"
+									},
+									"DatabaseName": {
+										"value": "@{pipeline().parameters.TableConfig.newDatabaseName}",
+										"type": "Expression"
+									},
+									"MostFrequentlyQueriedColumn": {
+										"value": "@{pipeline().parameters.TableConfig.MostFrequentlyQueriedColumn}",
+										"type": "Expression"
+									},
+									"TableSchemaName": {
+										"value": "@{pipeline().parameters.TableConfig.newSchema}",
+										"type": "Expression"
+									}
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "GEN_LSER_Databricks_Engineer",
+								"type": "LinkedServiceReference",
+								"parameters": {
+									"url": {
+										"value": "@pipeline().globalParameters.databricks_url",
+										"type": "Expression"
+									},
+									"token": {
+										"value": "@pipeline().globalParameters.secret_databricks_token",
+										"type": "Expression"
+									},
+									"cluster_id": {
+										"value": "@pipeline().globalParameters.databricks_cluster_eng",
+										"type": "Expression"
+									},
+									"keyvault_url": {
+										"value": "@pipeline().globalParameters.keyvault_url",
+										"type": "Expression"
+									}
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "IfIsPartitionedAndNotFullLoad",
+				"description": "If DifferentialPattern != \"FullLoad\" and PartitionExpressionSpark != \"\"",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "IfCleanupIfFullLoad",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@and(not(equals(pipeline().parameters.TableConfig.DifferentialPattern,'FullLoad')),not(equals(coalesce(pipeline().parameters.TableConfig.PartitionExpressionSpark,''),'')))\n\n\n",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "DeltaPartitionDiff",
+							"type": "DatabricksNotebook",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"notebookPath": {
+									"value": "/@{pipeline().parameters.enviroment}@{pipeline().parameters.DifferentialNotebookPath}",
+									"type": "Expression"
+								},
+								"baseParameters": {
+									"Path": {
+										"value": "LZ/Database/@{pipeline().parameters.TableConfig.ServerNameDL}/",
+										"type": "Expression"
+									},
+									"TableName": {
+										"value": "@{replace(pipeline().parameters.TableConfig.newTableName,' ','_')}",
+										"type": "Expression"
+									},
+									"partitionColumn": {
+										"value": "@{if(empty(pipeline().parameters.TableConfig.partitionColumn),'',pipeline().parameters.TableConfig.partitionColumn)}",
+										"type": "Expression"
+									},
+									"FormatToWrite": "delta",
+									"PartitionExpressionSpark": {
+										"value": "@{pipeline().parameters.TableConfig.PartitionExpressionSpark}",
+										"type": "Expression"
+									},
+									"PartitionColumnSpark": {
+										"value": "@{pipeline().parameters.TableConfig.PartitionColumnSpark}",
+										"type": "Expression"
+									},
+									"TableSize": {
+										"value": "@{pipeline().parameters.TableConfig.TableSize}",
+										"type": "Expression"
+									},
+									"DatabaseName": {
+										"value": "@{pipeline().parameters.TableConfig.newDatabaseName}",
+										"type": "Expression"
+									},
+									"MostFrequentlyQueriedColumn": {
+										"value": "@{pipeline().parameters.TableConfig.MostFrequentlyQueriedColumn}",
+										"type": "Expression"
+									},
+									"TableSchemaName": {
+										"value": "@{pipeline().parameters.TableConfig.newSchema}",
+										"type": "Expression"
+									},
+									"DifferentialColumnSpark": {
+										"value": "@{pipeline().parameters.TableConfig.DifferentialColumnSpark}",
+										"type": "Expression"
+									},
+									"DifferentialExpressionSpark": {
+										"value": "@{pipeline().parameters.TableConfig.DifferentialExpressionSpark}",
+										"type": "Expression"
+									},
+									"TableUniqueKeys": {
+										"value": "@{pipeline().parameters.TableConfig.TableUniqueKeys}",
+										"type": "Expression"
+									}
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "GEN_LSER_Databricks_Engineer",
+								"type": "LinkedServiceReference",
+								"parameters": {
+									"url": {
+										"value": "@pipeline().globalParameters.databricks_url",
+										"type": "Expression"
+									},
+									"token": {
+										"value": "@pipeline().globalParameters.secret_databricks_token",
+										"type": "Expression"
+									},
+									"cluster_id": {
+										"value": "@pipeline().globalParameters.databricks_cluster_eng",
+										"type": "Expression"
+									},
+									"keyvault_url": {
+										"value": "@pipeline().globalParameters.keyvault_url",
+										"type": "Expression"
+									}
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "FullLoad_ExternalTableSynapse",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "IfIsPartitionedAndNotFullLoad",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "IfIsNotPartitioned",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "IfIsPartitionedAndFullLoad",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "externalTableDefinition",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@equals(pipeline().parameters.TableConfig.DifferentialPattern,'FullLoad')",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "LoadUsingStage",
+							"type": "SqlServerStoredProcedure",
+							"dependsOn": [
+								{
+									"activity": "createSchema",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"storedProcedureName": "[stage].[spCreacionTablasExternas]",
+								"storedProcedureParameters": {
+									"behavior": {
+										"value": {
+											"value": "@pipeline().parameters.TableConfig.Behavior",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"columnList": {
+										"value": null,
+										"type": "String"
+									},
+									"database": {
+										"value": {
+											"value": "@if(equals(\npipeline().parameters.TableConfig.newDatabaseName,''),pipeline().parameters.TableConfig.sourceDatabaseName\n,pipeline().parameters.TableConfig.newDatabaseName\n)",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"ExternalSchemaName": {
+										"value": {
+											"value": "@if(equals(\npipeline().parameters.TableConfig.newDatabaseName,''),pipeline().parameters.TableConfig.sourceDatabaseName\n,pipeline().parameters.TableConfig.newDatabaseName\n)\n",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"ExternalTableDefinition": {
+										"value": {
+											"value": "@activity('externalTableDefinition').output.firstRow.CF",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"ExternalTablePrefix": {
+										"value": {
+											"value": "@{pipeline().parameters.TableConfig.newSchema}_",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"ExternalTableSufix": {
+										"value": "",
+										"type": "String"
+									},
+									"hasIdentity": {
+										"value": null,
+										"type": "Int16"
+									},
+									"printOnly": {
+										"value": "false",
+										"type": "Boolean"
+									},
+									"schemaName": {
+										"value": {
+											"value": "@{pipeline().parameters.TableConfig.newSchema}",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"serverName": {
+										"value": {
+											"value": "@{pipeline().parameters.TableConfig.ServerNameDL}",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"tableName": {
+										"value": {
+											"value": "@{replace(pipeline().parameters.TableConfig.newTableName,' ','_')}",
+											"type": "Expression"
+										},
+										"type": "String"
+									}
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "GEN_LSER_Synapse",
+								"type": "LinkedServiceReference",
+								"parameters": {
+									"keyvault_url": {
+										"value": "@pipeline().globalParameters.keyvault_url",
+										"type": "Expression"
+									},
+									"domain": {
+										"value": "@pipeline().globalParameters.synapse_domain",
+										"type": "Expression"
+									},
+									"database": {
+										"value": "@pipeline().globalParameters.synapse_dbase",
+										"type": "Expression"
+									},
+									"user": {
+										"value": "@pipeline().globalParameters.synapse_user",
+										"type": "Expression"
+									},
+									"password": {
+										"value": "@pipeline().globalParameters.secret_synapse_psswd",
+										"type": "Expression"
+									}
+								}
+							}
+						},
+						{
+							"name": "createSchema",
+							"type": "Lookup",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "SqlDWSource",
+									"sqlReaderQuery": {
+										"value": "\nselect 1;\n\nIF NOT EXISTS ( SELECT  *\n                FROM    sys.schemas\n                WHERE   name = N'@{pipeline().parameters.TableConfig.newDatabaseName}' )\n    EXEC('CREATE SCHEMA @{pipeline().parameters.TableConfig.newDatabaseName}')",
+										"type": "Expression"
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"dataset": {
+									"referenceName": "GEN_DSET_Synapse",
+									"type": "DatasetReference",
+									"parameters": {
+										"Schema": "NoSchema",
+										"TableName": "NoTable",
+										"database": {
+											"value": "@pipeline().globalParameters.synapse_dbase",
+											"type": "Expression"
+										},
+										"domain": {
+											"value": "@pipeline().globalParameters.synapse_domain",
+											"type": "Expression"
+										},
+										"keyvault_url": {
+											"value": "@pipeline().globalParameters.keyvault_url",
+											"type": "Expression"
+										},
+										"password": {
+											"value": "@pipeline().globalParameters.secret_synapse_psswd",
+											"type": "Expression"
+										},
+										"user": {
+											"value": "@pipeline().globalParameters.synapse_user",
+											"type": "Expression"
+										}
+									}
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "HackToGenerateErrorIFLastModification_copy1_copy3",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "GEN_PLIN_ParametricSendMail_Error",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureTableSource",
+						"azureTableSourceIgnoreTableNotFound": false
+					},
+					"dataset": {
+						"referenceName": "GEN_DSET_ADLS_AzureTable",
+						"type": "DatasetReference",
+						"parameters": {
+							"TableName": "Hack",
+							"url": {
+								"value": "@pipeline().globalParameters.storage_url",
+								"type": "Expression"
+							},
+							"key": {
+								"value": "@pipeline().globalParameters.secret_storage_key",
+								"type": "Expression"
+							},
+							"keyvault_url": {
+								"value": "@pipeline().globalParameters.keyvault_url",
+								"type": "Expression"
+							},
+							"account": {
+								"value": "@pipeline().parameters.storageAccount",
+								"type": "Expression"
+							}
+						}
+					}
+				}
+			},
+			{
+				"name": "GEN_PLIN_ParametricSendMail_Error",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "IfLastModification",
+						"dependencyConditions": [
+							"Failed"
+						]
+					},
+					{
+						"activity": "columnNoSpaces",
+						"dependencyConditions": [
+							"Failed"
+						]
+					},
+					{
+						"activity": "IfIsNotPartitioned",
+						"dependencyConditions": [
+							"Failed"
+						]
+					},
+					{
+						"activity": "IfIsPartitionedAndFullLoad",
+						"dependencyConditions": [
+							"Failed"
+						]
+					},
+					{
+						"activity": "IfIsPartitionedAndNotFullLoad",
+						"dependencyConditions": [
+							"Failed"
+						]
+					},
+					{
+						"activity": "IfBackInTimeCheckSum",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "GEN_PLIN_SendMail",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"EmailTo": {
+							"value": "@pipeline().parameters.EmailTo",
+							"type": "Expression"
+						},
+						"Subject": {
+							"value": "Se ha presentado un error al preparar la tabla @{pipeline().parameters.TableConfig.RowKey}",
+							"type": "Expression"
+						},
+						"ErrorMessage": {
+							"value": "Se ha presentado un error en el pipeline @{pipeline().Pipeline} al intentar preparar la tabla @{pipeline().parameters.TableConfig.RowKey} de la configuracion @{pipeline().parameters.TableConfig.PartitionKey} con tipo de carga @{pipeline().parameters.TableConfig.DifferentialPattern} cuya carga inició @{pipeline().parameters.NewLoadDate}  ",
+							"type": "Expression"
+						},
+						"Url": {
+							"value": "@pipeline().globalParameters.logicapp_email_url",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "IfNotNextPattern",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "spUpdateUsingDifferential",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@equals(coalesce(pipeline().parameters.TableConfig.NextPattern,''),'')",
+						"type": "Expression"
+					},
+					"ifFalseActivities": [
+						{
+							"name": "UpdateNextPatternLoadDate",
+							"type": "Copy",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureTableSource",
+									"additionalColumns": [
+										{
+											"name": "NewLoadDate",
+											"value": {
+												"value": "@pipeline().parameters.NewLoadDate",
+												"type": "Expression"
+											}
+										}
+									],
+									"azureTableSourceQuery": {
+										"value": "PartitionKey eq '@{pipeline().parameters.TableConfig.PartitionKey}' and RowKey eq '@{pipeline().parameters.TableConfig.RowKey}'",
+										"type": "Expression"
+									},
+									"azureTableSourceIgnoreTableNotFound": false
+								},
+								"sink": {
+									"type": "AzureTableSink",
+									"azureTableInsertType": "merge",
+									"azureTablePartitionKeyName": "PartitionKey",
+									"azureTableRowKeyName": "RowKey",
+									"writeBatchSize": 10000
+								},
+								"enableStaging": false,
+								"translator": {
+									"type": "TabularTranslator",
+									"mappings": [
+										{
+											"source": {
+												"name": "PartitionKey",
+												"type": "String"
+											},
+											"sink": {
+												"name": "PartitionKey",
+												"type": "String"
+											}
+										},
+										{
+											"source": {
+												"name": "RowKey",
+												"type": "String"
+											},
+											"sink": {
+												"name": "RowKey",
+												"type": "String"
+											}
+										},
+										{
+											"source": {
+												"name": "DifferentialFilter"
+											},
+											"sink": {
+												"name": "LoadFilter"
+											}
+										},
+										{
+											"source": {
+												"name": "NextPattern",
+												"type": "String"
+											},
+											"sink": {
+												"name": "DifferentialPattern",
+												"type": "String"
+											}
+										},
+										{
+											"source": {
+												"name": "NewLoadDate"
+											},
+											"sink": {
+												"name": "LastLoad"
+											}
+										}
+									],
+									"typeConversion": true,
+									"typeConversionSettings": {
+										"allowDataTruncation": true,
+										"treatBooleanAsNumber": false
+									}
+								}
+							},
+							"inputs": [
+								{
+									"referenceName": "GEN_DSET_ADLS_AzureTable",
+									"type": "DatasetReference",
+									"parameters": {
+										"TableName": {
+											"value": "@pipeline().parameters.configurationTableName",
+											"type": "Expression"
+										},
+										"url": {
+											"value": "@pipeline().globalParameters.storage_url",
+											"type": "Expression"
+										},
+										"key": {
+											"value": "@pipeline().globalParameters.secret_storage_key",
+											"type": "Expression"
+										},
+										"keyvault_url": {
+											"value": "@pipeline().globalParameters.keyvault_url",
+											"type": "Expression"
+										},
+										"account": {
+											"value": "@pipeline().parameters.storageAccount",
+											"type": "Expression"
+										}
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "GEN_DSET_ADLS_AzureTable",
+									"type": "DatasetReference",
+									"parameters": {
+										"TableName": {
+											"value": "@pipeline().parameters.configurationTableName",
+											"type": "Expression"
+										},
+										"url": {
+											"value": "@pipeline().globalParameters.storage_url",
+											"type": "Expression"
+										},
+										"key": {
+											"value": "@pipeline().globalParameters.secret_storage_key",
+											"type": "Expression"
+										},
+										"keyvault_url": {
+											"value": "@pipeline().globalParameters.keyvault_url",
+											"type": "Expression"
+										},
+										"account": {
+											"value": "@pipeline().parameters.storageAccount",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						}
+					],
+					"ifTrueActivities": [
+						{
+							"name": "UpdateLastLoad",
+							"type": "Copy",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureTableSource",
+									"additionalColumns": [
+										{
+											"name": "NewLoadDate",
+											"value": {
+												"value": "@pipeline().parameters.NewLoadDate",
+												"type": "Expression"
+											}
+										}
+									],
+									"azureTableSourceQuery": {
+										"value": "PartitionKey eq '@{pipeline().parameters.TableConfig.PartitionKey}' and RowKey eq '@{pipeline().parameters.TableConfig.RowKey}'",
+										"type": "Expression"
+									},
+									"azureTableSourceIgnoreTableNotFound": false
+								},
+								"sink": {
+									"type": "AzureTableSink",
+									"azureTableInsertType": "merge",
+									"azureTablePartitionKeyName": "PartitionKey",
+									"azureTableRowKeyName": "RowKey",
+									"writeBatchSize": 10000
+								},
+								"enableStaging": false,
+								"translator": {
+									"type": "TabularTranslator",
+									"mappings": [
+										{
+											"source": {
+												"name": "PartitionKey",
+												"type": "String"
+											},
+											"sink": {
+												"name": "PartitionKey",
+												"type": "String"
+											}
+										},
+										{
+											"source": {
+												"name": "RowKey",
+												"type": "String"
+											},
+											"sink": {
+												"name": "RowKey",
+												"type": "String"
+											}
+										},
+										{
+											"source": {
+												"name": "NewLoadDate",
+												"type": "String"
+											},
+											"sink": {
+												"name": "LastLoad",
+												"type": "String"
+											}
+										}
+									],
+									"typeConversion": true,
+									"typeConversionSettings": {
+										"allowDataTruncation": true,
+										"treatBooleanAsNumber": false
+									}
+								}
+							},
+							"inputs": [
+								{
+									"referenceName": "GEN_DSET_ADLS_AzureTable",
+									"type": "DatasetReference",
+									"parameters": {
+										"TableName": {
+											"value": "@pipeline().parameters.configurationTableName",
+											"type": "Expression"
+										},
+										"url": {
+											"value": "@pipeline().globalParameters.storage_url",
+											"type": "Expression"
+										},
+										"key": {
+											"value": "@pipeline().globalParameters.secret_storage_key",
+											"type": "Expression"
+										},
+										"keyvault_url": {
+											"value": "@pipeline().globalParameters.keyvault_url",
+											"type": "Expression"
+										},
+										"account": {
+											"value": "@pipeline().parameters.storageAccount",
+											"type": "Expression"
+										}
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "GEN_DSET_ADLS_AzureTable",
+									"type": "DatasetReference",
+									"parameters": {
+										"TableName": {
+											"value": "@pipeline().parameters.configurationTableName",
+											"type": "Expression"
+										},
+										"url": {
+											"value": "@pipeline().globalParameters.storage_url",
+											"type": "Expression"
+										},
+										"key": {
+											"value": "@pipeline().globalParameters.secret_storage_key",
+											"type": "Expression"
+										},
+										"keyvault_url": {
+											"value": "@pipeline().globalParameters.keyvault_url",
+											"type": "Expression"
+										},
+										"account": {
+											"value": "@pipeline().parameters.storageAccount",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						}
+					]
+				}
+			},
+			{
+				"name": "CleanUpStage_Precopy",
+				"type": "Delete",
+				"dependsOn": [
+					{
+						"activity": "IfLastModificationDS_KeyValue",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "IfLastModificationDS_DIfferentialPartition",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "IfPartitionBackInTimeFull",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "IfBackInTimeCheckSum",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"dataset": {
+						"referenceName": "GEN_DSET_ADLSBinary",
+						"type": "DatasetReference",
+						"parameters": {
+							"container": {
+								"value": "@pipeline().parameters.container",
+								"type": "Expression"
+							},
+							"path": {
+								"value": "LZ/Database/@{pipeline().parameters.TableConfig.ServerNameDL}/@{if(equals(pipeline().parameters.TableConfig.newDatabaseName,''),pipeline().parameters.TableConfig.sourceDatabaseName,pipeline().parameters.TableConfig.newDatabaseName)}/@{pipeline().parameters.TableConfig.newSchema}/stage_@{replace(pipeline().parameters.TableConfig.newTableName,' ','_')}/",
+								"type": "Expression"
+							},
+							"url": {
+								"value": "@pipeline().globalParameters.storage_url",
+								"type": "Expression"
+							},
+							"key": {
+								"value": "@pipeline().globalParameters.secret_storage_key",
+								"type": "Expression"
+							},
+							"keyvault_url": {
+								"value": "@pipeline().globalParameters.keyvault_url",
+								"type": "Expression"
+							}
+						}
+					},
+					"enableLogging": false,
+					"storeSettings": {
+						"type": "AzureBlobFSReadSettings",
+						"recursive": true
+					}
+				}
+			},
+			{
+				"name": "IfBackInTimeCheckSum",
+				"description": "if DifferentialPattern == 'BackInTime' and DifferentialStrategy == 'CheckSum'",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "columnNoSpaces",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@and(equals(pipeline().parameters.TableConfig.DifferentialPattern,'BackInTime'), equals(pipeline().parameters.TableConfig.DifferentialStrategy,'CheckSum'))",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "calculateCheckSum",
+							"type": "DatabricksNotebook",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"notebookPath": {
+									"value": "/@{pipeline().parameters.enviroment}@{pipeline().parameters.checkSumNotebookPath}",
+									"type": "Expression"
+								},
+								"baseParameters": {
+									"DatabaseName": {
+										"value": "@{pipeline().parameters.TableConfig.newDatabaseName}",
+										"type": "Expression"
+									},
+									"TableSchemaName": {
+										"value": "@{pipeline().parameters.TableConfig.newSchema}",
+										"type": "Expression"
+									},
+									"TableName": {
+										"value": "@{replace(pipeline().parameters.TableConfig.newTableName,' ','_')}",
+										"type": "Expression"
+									},
+									"DifferentialExpressionSpark": {
+										"value": "@{pipeline().parameters.TableConfig.DifferentialExpressionSpark}",
+										"type": "Expression"
+									},
+									"Path": {
+										"value": "LZ/Database/@{pipeline().parameters.TableConfig.ServerNameDL}/",
+										"type": "Expression"
+									},
+									"checksumModulus": {
+										"value": "@pipeline().parameters.checksumModulus",
+										"type": "Expression"
+									}
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "GEN_LSER_Databricks_Engineer",
+								"type": "LinkedServiceReference",
+								"parameters": {
+									"url": {
+										"value": "@pipeline().globalParameters.databricks_url",
+										"type": "Expression"
+									},
+									"token": {
+										"value": "@pipeline().globalParameters.secret_databricks_token",
+										"type": "Expression"
+									},
+									"cluster_id": {
+										"value": "@pipeline().globalParameters.databricks_cluster_eng",
+										"type": "Expression"
+									},
+									"keyvault_url": {
+										"value": "@pipeline().globalParameters.keyvault_url",
+										"type": "Expression"
+									}
+								}
+							}
+						},
+						{
+							"name": "readCheckSum",
+							"type": "Lookup",
+							"dependsOn": [
+								{
+									"activity": "calculateCheckSum",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "DelimitedTextSource",
+									"storeSettings": {
+										"type": "AzureBlobFSReadSettings",
+										"recursive": true,
+										"enablePartitionDiscovery": false
+									},
+									"formatSettings": {
+										"type": "DelimitedTextReadSettings"
+									}
+								},
+								"dataset": {
+									"referenceName": "GEN_DSET_ADLS_CSV",
+									"type": "DatasetReference",
+									"parameters": {
+										"container": {
+											"value": "@pipeline().parameters.container",
+											"type": "Expression"
+										},
+										"directory": {
+											"value": "LZ/Database/@{pipeline().parameters.TableConfig.ServerNameDL}/@{if(equals(pipeline().parameters.TableConfig.newDatabaseName,''),pipeline().parameters.TableConfig.sourceDatabaseName,pipeline().parameters.TableConfig.newDatabaseName)}/@{pipeline().parameters.TableConfig.newSchema}/ChecksumCalculation/@{replace(pipeline().parameters.TableConfig.newTableName,' ','_')}/",
+											"type": "Expression"
+										},
+										"FirstRowAsHeader": false,
+										"fileName": "data.csv",
+										"url": {
+											"value": "@pipeline().globalParameters.storage_url",
+											"type": "Expression"
+										},
+										"key": {
+											"value": "@pipeline().globalParameters.secret_storage_key",
+											"type": "Expression"
+										},
+										"keyvault_url": {
+											"value": "@pipeline().globalParameters.keyvault_url",
+											"type": "Expression"
+										}
+									}
+								}
+							}
+						},
+						{
+							"name": "searchForDifferences",
+							"type": "Lookup",
+							"dependsOn": [
+								{
+									"activity": "readCheckSum",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "SqlServerSource",
+									"sqlReaderQuery": {
+										"value": "declare @diferences varchar(max) = ''\n\n\n;With SourceCheck as (\nSELECT @{pipeline().parameters.TableConfig.PartitionExpressionSQL} as @{pipeline().parameters.TableConfig.DifferentialColumnSpark}, sum(checksum(*) % @{pipeline().parameters.checksumModulus}) as _checksum FROM \n   (\n   select  @{activity('columnNoSpaces').output.firstRow.CF}\n   from @{pipeline().parameters.TableConfig.RowKey}\n   ) as ST\n   group by @{pipeline().parameters.TableConfig.PartitionExpressionSQL}\n)\n\n\nselect @diferences = coalesce(@diferences + ',','') + '(''' + cast(ST.@{pipeline().parameters.TableConfig.DifferentialColumnSpark} as varchar(max)) + ''')'   \nfrom SourceCheck as ST\nwhere not exists (\n\tselect PartitionValue,CheckSumValue from (values \n\t\t@{replace(activity('readCheckSum').output.firstRow.Prop_0,'`','''')}\n\t) as Target(PartitionValue,CheckSumValue) \n\twhere ST.@{pipeline().parameters.TableConfig.DifferentialColumnSpark} = Target.PartitionValue\n\tand ST._checksum = Target.CheckSumValue\n)\n\nselect SUBSTRING(@diferences,2,2147483647) as D",
+										"type": "Expression"
+									},
+									"queryTimeout": "08:20:00",
+									"partitionOption": "None"
+								},
+								"dataset": {
+									"referenceName": "GEN_DSET_SQLServer_QuinuaGITD",
+									"type": "DatasetReference",
+									"parameters": {
+										"serverName": {
+											"value": "@{pipeline().parameters.TableConfig.sourceServerName}",
+											"type": "Expression"
+										},
+										"databaseName": {
+											"value": "@{pipeline().parameters.TableConfig.sourceDatabaseName}",
+											"type": "Expression"
+										},
+										"user": {
+											"value": "@pipeline().globalParameters.quinuagitd_user",
+											"type": "Expression"
+										},
+										"password": {
+											"value": "@pipeline().globalParameters.secret_quinuagitd_psswd",
+											"type": "Expression"
+										},
+										"keyvault_url": {
+											"value": "@pipeline().globalParameters.keyvault_url",
+											"type": "Expression"
+										}
+									}
+								},
+								"firstRowOnly": true
+							}
+						},
+						{
+							"name": "cleanCheckSumFolder",
+							"type": "Delete",
+							"dependsOn": [
+								{
+									"activity": "readCheckSum",
+									"dependencyConditions": [
+										"Skipped"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"dataset": {
+									"referenceName": "GEN_DSET_ADLSBinary",
+									"type": "DatasetReference",
+									"parameters": {
+										"container": {
+											"value": "@pipeline().parameters.container",
+											"type": "Expression"
+										},
+										"path": {
+											"value": "LZ/Database/@{pipeline().parameters.TableConfig.ServerNameDL}/@{if(equals(pipeline().parameters.TableConfig.newDatabaseName,''),pipeline().parameters.TableConfig.sourceDatabaseName,pipeline().parameters.TableConfig.newDatabaseName)}/@{pipeline().parameters.TableConfig.newSchema}/ChecksumCalculation/@{replace(pipeline().parameters.TableConfig.newTableName,' ','_')}/",
+											"type": "Expression"
+										},
+										"url": {
+											"value": "@pipeline().globalParameters.storage_url",
+											"type": "Expression"
+										},
+										"key": {
+											"value": "@pipeline().globalParameters.secret_storage_key",
+											"type": "Expression"
+										},
+										"keyvault_url": {
+											"value": "@pipeline().globalParameters.keyvault_url",
+											"type": "Expression"
+										}
+									}
+								},
+								"enableLogging": false,
+								"storeSettings": {
+									"type": "AzureBlobFSReadSettings",
+									"recursive": true,
+									"enablePartitionDiscovery": false
+								}
+							}
+						},
+						{
+							"name": "BackInTimeCheckSum",
+							"type": "SetVariable",
+							"dependsOn": [
+								{
+									"activity": "searchForDifferences",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "LoadQuery",
+								"value": {
+									"value": "SELECT *, checksum(*) as _checksum FROM \n\t(\n\tselect @{activity('columnNoSpaces').output.firstRow.CF}  \n\tfrom @{pipeline().parameters.TableConfig.RowKey} as ST\n\n@{if(equals(coalesce(activity('searchForDifferences').output.firstRow.D,''),''), ' where 1=0 ',\n concat(' where exists (select * from (values ', activity('searchForDifferences').output.firstRow.D, ') as Target(PartitionValue)  where ',\npipeline().parameters.TableConfig.PartitionExpressionSQL, ' = Target.PartitionValue)'))}\n\n\t) as ST",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "ReadDataFromSourceDelete",
+							"type": "Copy",
+							"dependsOn": [
+								{
+									"activity": "readCheckSum",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 1,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "SqlServerSource",
+									"sqlReaderQuery": {
+										"value": "declare @SourceCheck table (PartitionValue varchar(500) not null )\n\ninsert into @SourceCheck\nSELECT distinct cast(@{pipeline().parameters.TableConfig.PartitionExpressionSQL} as varchar(500)) as @{pipeline().parameters.TableConfig.DifferentialColumnSpark} \n\tfrom @{pipeline().parameters.TableConfig.RowKey} as ST\n\n;With ChkSum as (\nselect PartitionValue,CheckSumValue from (values \n\t\t@{replace(activity('readCheckSum').output.firstRow.Prop_0,'`','''')}\n\t) as Target(PartitionValue,CheckSumValue) \n)\n\nselect ST.PartitionValue \nFROM ChkSum as ST\nwhere not exists (select * from @SourceCheck SC\n\twhere ST.PartitionValue = SC.PartitionValue)",
+										"type": "Expression"
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"sink": {
+									"type": "ParquetSink",
+									"storeSettings": {
+										"type": "AzureBlobFSWriteSettings"
+									},
+									"formatSettings": {
+										"type": "ParquetWriteSettings"
+									}
+								},
+								"enableStaging": false,
+								"parallelCopies": 8,
+								"validateDataConsistency": true,
+								"dataIntegrationUnits": 2
+							},
+							"inputs": [
+								{
+									"referenceName": "GEN_DSET_SQLServer_QuinuaGITD",
+									"type": "DatasetReference",
+									"parameters": {
+										"serverName": {
+											"value": "@{pipeline().parameters.TableConfig.sourceServerName}",
+											"type": "Expression"
+										},
+										"databaseName": {
+											"value": "@{pipeline().parameters.TableConfig.sourceDatabaseName}",
+											"type": "Expression"
+										},
+										"user": {
+											"value": "@pipeline().globalParameters.quinuagitd_user",
+											"type": "Expression"
+										},
+										"password": {
+											"value": "@pipeline().globalParameters.secret_quinuagitd_psswd",
+											"type": "Expression"
+										},
+										"keyvault_url": {
+											"value": "@pipeline().globalParameters.keyvault_url",
+											"type": "Expression"
+										}
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "GEN_DSET_ADLS_Parquet",
+									"type": "DatasetReference",
+									"parameters": {
+										"container": {
+											"value": "@pipeline().parameters.container",
+											"type": "Expression"
+										},
+										"path": {
+											"value": "LZ/Database/@{pipeline().parameters.TableConfig.ServerNameDL}/@{if(equals(pipeline().parameters.TableConfig.newDatabaseName,''),pipeline().parameters.TableConfig.sourceDatabaseName,pipeline().parameters.TableConfig.newDatabaseName)}/@{pipeline().parameters.TableConfig.newSchema}/stageDelete_@{replace(pipeline().parameters.TableConfig.newTableName,' ','_')}/",
+											"type": "Expression"
+										},
+										"url": {
+											"value": "@pipeline().globalParameters.storage_url",
+											"type": "Expression"
+										},
+										"key": {
+											"value": "@pipeline().globalParameters.secret_storage_key",
+											"type": "Expression"
+										},
+										"keyvault_url": {
+											"value": "@pipeline().globalParameters.keyvault_url",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						}
+					]
+				}
+			},
+			{
+				"name": "IfCleanupIfFullLoad",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "IfLastModification",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@equals(pipeline().parameters.TableConfig.DifferentialPattern,'FullLoad')",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "CleanUp_ForFullLoad",
+							"type": "Delete",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"dataset": {
+									"referenceName": "GEN_DSET_ADLSBinary",
+									"type": "DatasetReference",
+									"parameters": {
+										"container": {
+											"value": "@pipeline().parameters.container",
+											"type": "Expression"
+										},
+										"path": {
+											"value": "LZ/Database/@{pipeline().parameters.TableConfig.ServerNameDL}/@{if(equals(pipeline().parameters.TableConfig.newDatabaseName,''),pipeline().parameters.TableConfig.sourceDatabaseName,pipeline().parameters.TableConfig.newDatabaseName)}/@{pipeline().parameters.TableConfig.newSchema}/@{replace(pipeline().parameters.TableConfig.newTableName,' ','_')}/",
+											"type": "Expression"
+										},
+										"url": {
+											"value": "@pipeline().globalParameters.storage_url",
+											"type": "Expression"
+										},
+										"key": {
+											"value": "@pipeline().globalParameters.secret_storage_key",
+											"type": "Expression"
+										},
+										"keyvault_url": {
+											"value": "@pipeline().globalParameters.keyvault_url",
+											"type": "Expression"
+										}
+									}
+								},
+								"enableLogging": false,
+								"storeSettings": {
+									"type": "AzureBlobFSReadSettings",
+									"recursive": true
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "DWH_PLIN_V3CleanUp",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "FullLoad_ExternalTableSynapse",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "DWH_PLIN_CargaOnPremises_CleanUp",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"container": {
+							"value": "@pipeline().parameters.container",
+							"type": "Expression"
+						},
+						"TableConfig": {
+							"value": "@pipeline().parameters.TableConfig",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "externalTableDefinition",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SqlServerSource",
+						"sqlReaderQuery": {
+							"value": "declare @schemaName nvarchar(128) = '@{pipeline().parameters.TableConfig.schemaName}'\ndeclare @tableName nvarchar(128) = '@{pipeline().parameters.TableConfig.tableName}'\n\n\ndeclare @columnList varchar(max) =''\n\n;With conversionTable as(\n\tSELECT cast(SourceType as nvarchar(128)) as SourceType, cast(TargetType as nvarchar(128)) as TargetType FROM (VALUES \n\t('numeric', 'decimal'),\n\t('tinyint', 'int'),\n\t('sysname', 'nvarchar'),\n\t('xml', 'varchar'),\n\t('uniqueidentifier', 'char'),\n\t('timestamp','datetime')\n\t) AS Conversion(SourceType, TargetType)\n)\n, Columninfo as (\nSELECT distinct \n    c.name ColumnName\n    ,ISNULL(ct.TargetType,t.[Name]) as Datatype\n\t,c.column_id\n\t,case \n\t\twhen ct.TargetType='numeric' or ct.TargetType='decimal' or t.[Name]='decimal' then concat('(',c.precision,',',c.scale,')')\n\t\twhen t.[Name] in ('nvarchar','varchar','nchar', 'xml','char','binary','varbinary','uniqueidentifier') then concat('(',\n\t\t\tcase \n\t\t\t\twhen t.[Name]='xml' then 'max'\n\t\t\t\twhen t.[Name]='uniqueidentifier' then '36'\n\t\t\t\twhen t.[Name]='varchar' and c.max_length\t=-1 then '8000'\n\t\t\t\twhen t.[Name]='nvarchar' and c.max_length\t=-1 then '4000'\n\t\t\t\twhen t.[Name]='nvarchar' or t.[Name]='nchar' and c.max_length\t>-1 then cast(c.max_length\t/2 as varchar(50))\n\t\t\t\telse\n\t\t\t\t\tcast(c.max_length as varchar(50))\n\t\t\tEnd\t\t\n\t\t,')')\n\telse ''\n\tend as PSL\nFROM    \n    sys.columns c\nINNER JOIN \n    sys.types t ON c.user_type_id = t.user_type_id\nLEFT OUTER JOIN \n\tconversionTable ct ON t.[name] = ct.SourceType\nLEFT OUTER JOIN \n    sys.index_columns ic ON ic.object_id = c.object_id AND ic.column_id = c.column_id\nLEFT OUTER JOIN \n    sys.indexes i ON ic.object_id = i.object_id AND ic.index_id = i.index_id\nWHERE\n    c.object_id = OBJECT_ID(concat(quotename(@schemaName),'.',QUOTENAME(@tableName)))\n)\n\nselect \n@columnList =coalesce(@columnList +','+ concat(quotename(ColumnName),' ',quotename(Datatype), PSL),concat(quotename(ColumnName),' ',quotename(Datatype), PSL)) \nfrom Columninfo\norder by column_id\n\nselect  substring(@columnList,2,2147483647) + ', CheckSum int, _HashValue int' as CF",
+							"type": "Expression"
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "GEN_DSET_SQLServer_QuinuaGITD",
+						"type": "DatasetReference",
+						"parameters": {
+							"serverName": {
+								"value": "@{pipeline().parameters.TableConfig.sourceServerName}",
+								"type": "Expression"
+							},
+							"databaseName": {
+								"value": "@{pipeline().parameters.TableConfig.sourceDatabaseName}",
+								"type": "Expression"
+							},
+							"user": {
+								"value": "@pipeline().globalParameters.quinuagitd_user",
+								"type": "Expression"
+							},
+							"password": {
+								"value": "@pipeline().globalParameters.secret_quinuagitd_psswd",
+								"type": "Expression"
+							},
+							"keyvault_url": {
+								"value": "@pipeline().globalParameters.keyvault_url",
+								"type": "Expression"
+							}
+						}
+					}
+				}
+			},
+			{
+				"name": "spUpdateUsingDifferential",
+				"type": "SqlServerStoredProcedure",
+				"dependsOn": [
+					{
+						"activity": "FullLoad_ExternalTableSynapse",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"storedProcedureName": "[stage].[spUpdateUsingDifferential]",
+					"storedProcedureParameters": {
+						"database": {
+							"value": {
+								"value": "@if(equals(\npipeline().parameters.TableConfig.newDatabaseName,''),pipeline().parameters.TableConfig.sourceDatabaseName\n,pipeline().parameters.TableConfig.newDatabaseName\n)",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"DifferentialColumnSpark": {
+							"value": {
+								"value": "@pipeline().parameters.TableConfig.DifferentialColumnSpark",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"DifferentialPattern": {
+							"value": "FullLoad",
+							"type": "String"
+						},
+						"DifferentialStrategy": {
+							"value": "",
+							"type": "String"
+						},
+						"ExternalTableDefinition": {
+							"value": {
+								"value": "@activity('externalTableDefinition').output.firstRow.CF",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"internalTablePartitionColumn": {
+							"value": {
+								"value": "@pipeline().parameters.TableConfig.internalTablePartitionColumn",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"internalTableSchema": {
+							"value": {
+								"value": "@pipeline().parameters.TableConfig.internalTableSchema",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"PartitionExpressionSQL": {
+							"value": {
+								"value": "@pipeline().parameters.TableConfig.PartitionExpressionSQL",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"printOnly": {
+							"value": "false",
+							"type": "Boolean"
+						},
+						"schemaName": {
+							"value": {
+								"value": "@{pipeline().parameters.TableConfig.newSchema}",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"tableName": {
+							"value": {
+								"value": "@{replace(pipeline().parameters.TableConfig.newTableName,' ','_')}",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"TableUniqueKeys": {
+							"value": {
+								"value": "@pipeline().parameters.TableConfig.TableUniqueKeys",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"TakeAction": {
+							"value": {
+								"value": "@Not(equals(pipeline().parameters.TableConfig.internalTableSchema,''))",
+								"type": "Expression"
+							},
+							"type": "Boolean"
+						}
+					}
+				},
+				"linkedServiceName": {
+					"referenceName": "GEN_LSER_Synapse",
+					"type": "LinkedServiceReference",
+					"parameters": {
+						"keyvault_url": {
+							"value": "@pipeline().globalParameters.keyvault_url",
+							"type": "Expression"
+						},
+						"domain": {
+							"value": "@pipeline().globalParameters.synapse_domain",
+							"type": "Expression"
+						},
+						"database": {
+							"value": "@pipeline().globalParameters.synapse_dbase",
+							"type": "Expression"
+						},
+						"user": {
+							"value": "@pipeline().globalParameters.synapse_user",
+							"type": "Expression"
+						},
+						"password": {
+							"value": "@pipeline().globalParameters.secret_synapse_psswd",
+							"type": "Expression"
+						}
+					}
+				}
+			}
+		],
+		"parameters": {
+			"container": {
+				"type": "string",
+				"defaultValue": "stage"
+			},
+			"NewLoadDate": {
+				"type": "string"
+			},
+			"partitionNotebookPath": {
+				"type": "string",
+				"defaultValue": "/Utils/DifferentialLoadDelta/01_FirstLoadPartitioning"
+			},
+			"EmailTo": {
+				"type": "string"
+			},
+			"DifferentialNotebookPath": {
+				"type": "string",
+				"defaultValue": "/Utils/DifferentialLoadDelta/02_DifferentialLoad"
+			},
+			"NoPartitionNotebookPath": {
+				"type": "string",
+				"defaultValue": "/Utils/DifferentialLoadDelta/01_NoPartitioning"
+			},
+			"FromEmail": {
+				"type": "string",
+				"defaultValue": "NOTIFICACIONESBIBA@compensarsalud.com"
+			},
+			"LoadConfiguration": {
+				"type": "string"
+			},
+			"checkSumNotebookPath": {
+				"type": "string",
+				"defaultValue": "/Utils/DifferentialLoadDelta/03_CalculateColumnChecksum"
+			},
+			"enviroment": {
+				"type": "string",
+				"defaultValue": "DEVELOP"
+			},
+			"configurationTableName": {
+				"type": "string"
+			},
+			"storageAccount": {
+				"type": "string"
+			},
+			"TableConfig": {
+				"type": "object"
+			},
+			"checksumModulus": {
+				"type": "string",
+				"defaultValue": "100000"
+			}
+		},
+		"variables": {
+			"LastModificationQuery": {
+				"type": "String"
+			},
+			"LoadQuery": {
+				"type": "String"
+			}
+		},
+		"folder": {
+			"name": "MOD_DWH/CargaOnPremises"
+		},
+		"annotations": [],
+		"lastPublishTime": "2022-08-30T16:35:14Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

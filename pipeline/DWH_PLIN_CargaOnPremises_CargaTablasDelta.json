@@ -1,0 +1,212 @@
+{
+	"name": "DWH_PLIN_CargaOnPremises_CargaTablasDelta",
+	"properties": {
+		"activities": [
+			{
+				"name": "ForEachTable",
+				"type": "ForEach",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@pipeline().parameters.tables",
+						"type": "Expression"
+					},
+					"isSequential": false,
+					"activities": [
+						{
+							"name": "DWH_PLIN_V3CargaTabla",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "DWH_PLIN_CargaOnPremises_CargaTabla",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"container": {
+										"value": "@pipeline().parameters.container",
+										"type": "Expression"
+									},
+									"NewLoadDate": {
+										"value": "@pipeline().parameters.NewLoadDate",
+										"type": "Expression"
+									},
+									"partitionNotebookPath": {
+										"value": "@pipeline().parameters.partitionNotebookPath",
+										"type": "Expression"
+									},
+									"EmailTo": {
+										"value": "@pipeline().parameters.EmailTo",
+										"type": "Expression"
+									},
+									"DifferentialNotebookPath": {
+										"value": "@pipeline().parameters.DifferentialNotebookPath",
+										"type": "Expression"
+									},
+									"NoPartitionNotebookPath": {
+										"value": "@pipeline().parameters.NoPartitionNotebookPath",
+										"type": "Expression"
+									},
+									"FromEmail": {
+										"value": "@pipeline().parameters.FromEmail",
+										"type": "Expression"
+									},
+									"LoadConfiguration": {
+										"value": "@pipeline().parameters.LoadConfiguration",
+										"type": "Expression"
+									},
+									"checkSumNotebookPath": {
+										"value": "@pipeline().parameters.checkSumNotebookPath",
+										"type": "Expression"
+									},
+									"enviroment": {
+										"value": "@pipeline().parameters.enviroment",
+										"type": "Expression"
+									},
+									"configurationTableName": {
+										"value": "@pipeline().parameters.configurationTableName",
+										"type": "Expression"
+									},
+									"storageAccount": {
+										"value": "@pipeline().parameters.storageAccount",
+										"type": "Expression"
+									},
+									"TableConfig": {
+										"value": "@item()",
+										"type": "Expression"
+									},
+									"checksumModulus": {
+										"value": "@pipeline().parameters.checksumModulus",
+										"type": "Expression"
+									}
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "GEN_PLIN_ParametricSendMail_Exito",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "ForEachTable",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "GEN_PLIN_SendMail",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"EmailTo": {
+							"value": "@pipeline().parameters.EmailTo",
+							"type": "Expression"
+						},
+						"Subject": {
+							"value": "Se ha finalizado el proceso  @{pipeline().parameters.LoadConfiguration}",
+							"type": "Expression"
+						},
+						"ErrorMessage": {
+							"value": "Se ha finalizado la carga: @{pipeline().parameters.LoadConfiguration} ",
+							"type": "Expression"
+						},
+						"Url": {
+							"value": "@pipeline().globalParameters.logicapp_email_url",
+							"type": "Expression"
+						}
+					}
+				}
+			}
+		],
+		"parameters": {
+			"tables": {
+				"type": "array",
+				"defaultValue": [
+					{
+						"PartitionKey": "QUINUA_GITD",
+						"RowKey": "[CS].[AFILDB].[EGM36]",
+						"Timestamp": "2021-01-12T23:05:59.0747508Z",
+						"DifferentialPattern": "LoadFull",
+						"ServerNameDL": "QUINUA/gitd",
+						"newDatabaseName": "CS",
+						"newSchema": "AFILDB",
+						"newTableName": "EGM36",
+						"schemaName": "AFILDB",
+						"sourceDatabaseName": "CS",
+						"sourceServerName": "QUINUA\\GITD,54083",
+						"tableName": "EGM36",
+						"LastLoad": null,
+						"PartitionColumnName": null,
+						"PartitionExpresion": null,
+						"RowCreationColumnName": null,
+						"RowCreationExpression": null,
+						"RowModificationColumnName": null,
+						"RowModificationExpression": null
+					}
+				]
+			},
+			"container": {
+				"type": "string",
+				"defaultValue": "stage"
+			},
+			"NewLoadDate": {
+				"type": "string"
+			},
+			"partitionNotebookPath": {
+				"type": "string",
+				"defaultValue": "/Utils/DifferentialLoadDelta/01_FirstLoadPartitioning"
+			},
+			"EmailTo": {
+				"type": "string"
+			},
+			"DifferentialNotebookPath": {
+				"type": "string",
+				"defaultValue": "/Utils/DifferentialLoadDelta/02_DifferentialLoad"
+			},
+			"NoPartitionNotebookPath": {
+				"type": "string",
+				"defaultValue": "/Utils/DifferentialLoadDelta/01_NoPartitioning"
+			},
+			"FromEmail": {
+				"type": "string",
+				"defaultValue": "NOTIFICACIONESBIBA@compensarsalud.com"
+			},
+			"LoadConfiguration": {
+				"type": "string"
+			},
+			"checkSumNotebookPath": {
+				"type": "string",
+				"defaultValue": "/Utils/DifferentialLoadDelta/03_CalculateColumnChecksum"
+			},
+			"enviroment": {
+				"type": "string",
+				"defaultValue": "DEVELOP"
+			},
+			"configurationTableName": {
+				"type": "string"
+			},
+			"storageAccount": {
+				"type": "string"
+			},
+			"checksumModulus": {
+				"type": "string",
+				"defaultValue": "100000"
+			}
+		},
+		"folder": {
+			"name": "MOD_DWH/CargaOnPremises"
+		},
+		"annotations": [],
+		"lastPublishTime": "2022-08-30T16:35:24Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

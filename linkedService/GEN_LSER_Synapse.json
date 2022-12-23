@@ -1,0 +1,57 @@
+{
+	"name": "GEN_LSER_Synapse",
+	"type": "Microsoft.DataFactory/factories/linkedservices",
+	"properties": {
+		"description": "Linked service generico para conectar a cualquier recurso de synapse",
+		"parameters": {
+			"keyvault_url": {
+				"type": "string",
+				"defaultValue": "https://Kvl-BIBA-Np.vault.azure.net/"
+			},
+			"domain": {
+				"type": "string",
+				"defaultValue": "sql-dwh-eureka.database.windows.net"
+			},
+			"database": {
+				"type": "string",
+				"defaultValue": "synapse_dbase"
+			},
+			"user": {
+				"type": "string",
+				"defaultValue": "userBIBA_AZAS"
+			},
+			"password": {
+				"type": "string",
+				"defaultValue": "!&}cv6x$mcAWY^3S"
+			}
+		},
+		"annotations": [
+			"Linked service generico para conectar a cualquier recurso de synapse"
+		],
+		"type": "AzureSqlDW",
+		"typeProperties": {
+			"connectionString": "Integrated Security=False;Encrypt=True;Connection Timeout=30;Data Source=@{linkedService().domain};Initial Catalog=@{linkedService().database};User ID=@{linkedService().user}",
+			"password": {
+				"type": "AzureKeyVaultSecret",
+				"store": {
+					"referenceName": "GEN_LSER_Keyvault",
+					"type": "LinkedServiceReference",
+					"parameters": {
+						"url": {
+							"value": "@linkedService().keyvault_url",
+							"type": "Expression"
+						}
+					}
+				},
+				"secretName": {
+					"value": "@linkedService().password",
+					"type": "Expression"
+				}
+			}
+		},
+		"connectVia": {
+			"referenceName": "IR-BIBA-ONCLOUD-Central",
+			"type": "IntegrationRuntimeReference"
+		}
+	}
+}

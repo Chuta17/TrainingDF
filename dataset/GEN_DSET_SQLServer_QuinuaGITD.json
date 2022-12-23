@@ -1,0 +1,60 @@
+{
+	"name": "GEN_DSET_SQLServer_QuinuaGITD",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "GEN_LSER_SQLServer",
+			"type": "LinkedServiceReference",
+			"parameters": {
+				"server": {
+					"value": "@dataset().serverName",
+					"type": "Expression"
+				},
+				"database": {
+					"value": "@dataset().databaseName",
+					"type": "Expression"
+				},
+				"user": {
+					"value": "@dataset().user",
+					"type": "Expression"
+				},
+				"password": {
+					"value": "@dataset().password",
+					"type": "Expression"
+				},
+				"keyvault_url": {
+					"value": "@dataset().keyvault_url",
+					"type": "Expression"
+				}
+			}
+		},
+		"parameters": {
+			"serverName": {
+				"type": "string",
+				"defaultValue": "QUINUA\\GITD,54083"
+			},
+			"databaseName": {
+				"type": "string",
+				"defaultValue": "CS"
+			},
+			"user": {
+				"type": "string",
+				"defaultValue": "consorciosalud\\USUSVBIBA"
+			},
+			"password": {
+				"type": "string",
+				"defaultValue": "secret-quinuaserver-dev-password"
+			},
+			"keyvault_url": {
+				"type": "string",
+				"defaultValue": "https://Kvl-BIBA-Np.vault.azure.net/"
+			}
+		},
+		"folder": {
+			"name": "General"
+		},
+		"annotations": [],
+		"type": "SqlServerTable",
+		"schema": []
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

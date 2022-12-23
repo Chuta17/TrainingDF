@@ -1,0 +1,32 @@
+{
+	"name": "GEN_LSER_ADLS2",
+	"type": "Microsoft.DataFactory/factories/linkedservices",
+	"properties": {
+		"description": "Linked service parametrizado a cualquier ADLS2",
+		"parameters": {
+			"url": {
+				"type": "string",
+				"defaultValue": "https://storbibanp2.dfs.core.windows.net/"
+			},
+			"key": {
+				"type": "string",
+				"defaultValue": "secret-storageaccount-key1"
+			},
+			"keyvault_url": {
+				"type": "string",
+				"defaultValue": "https://Kvl-BIBA-Np.vault.azure.net/"
+			}
+		},
+		"annotations": [
+			"Linked service parametrizado a cualquier ADLS2"
+		],
+		"type": "AzureBlobFS",
+		"typeProperties": {
+			"url": "@linkedService().url"
+		},
+		"connectVia": {
+			"referenceName": "IR-BIBA-ONCLOUD-Central",
+			"type": "IntegrationRuntimeReference"
+		}
+	}
+}
