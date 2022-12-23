@@ -1,0 +1,39 @@
+{
+	"name": "dsAzureSQLDataStoreDestination",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "lsAzureSqlDatabase_xuscedataazsql",
+			"type": "LinkedServiceReference",
+			"parameters": {
+				"ConnectionStringSecretName": {
+					"value": "@dataset().ConnectionStringSecretName",
+					"type": "Expression"
+				}
+			}
+		},
+		"parameters": {
+			"SchemaName": {
+				"type": "string"
+			},
+			"TableName": {
+				"type": "string"
+			},
+			"ConnectionStringSecretName": {
+				"type": "string"
+			}
+		},
+		"annotations": [],
+		"type": "AzureSqlTable",
+		"schema": [],
+		"typeProperties": {
+			"schema": {
+				"value": "@dataset().SchemaName",
+				"type": "Expression"
+			},
+			"table": {
+				"value": "@dataset().TableName",
+				"type": "Expression"
+			}
+		}
+	}
+}

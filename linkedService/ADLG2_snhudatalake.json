@@ -1,0 +1,11 @@
+{
+	"name": "ADLG2_snhudatalake",
+	"type": "Microsoft.DataFactory/factories/linkedservices",
+	"properties": {
+		"annotations": [],
+		"type": "AzureBlobFS",
+		"typeProperties": {
+			"url": "https://snhudatalake.dfs.core.windows.net"
+		}
+	}
+}

@@ -1,0 +1,127 @@
+{
+	"name": "Send Email Alert",
+	"properties": {
+		"activities": [
+			{
+				"name": "If Success",
+				"type": "IfCondition",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@equals(contains(pipeline().parameters.Subject, 'Successful'), true)",
+						"type": "Expression"
+					},
+					"ifFalseActivities": [
+						{
+							"name": "Send Mail Failure",
+							"type": "SqlServerStoredProcedure",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"storedProcedureName": "msdb.dbo.sp_send_dbmail",
+								"storedProcedureParameters": {
+									"recipients": {
+										"value": {
+											"value": "@pipeline().parameters.Recipients",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"subject": {
+										"value": {
+											"value": "@pipeline().parameters.Subject",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"body": {
+										"value": {
+											"value": "@pipeline().parameters.Body",
+											"type": "Expression"
+										},
+										"type": "String"
+									}
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "EIL_MI_LOGGING_PROD",
+								"type": "LinkedServiceReference"
+							}
+						}
+					],
+					"ifTrueActivities": [
+						{
+							"name": "Send Mail Success",
+							"type": "SqlServerStoredProcedure",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"storedProcedureName": "msdb.dbo.sp_send_dbmail",
+								"storedProcedureParameters": {
+									"recipients": {
+										"value": {
+											"value": "@replace(pipeline().parameters.Recipients, ';DBARequest@snhu.edu','')",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"subject": {
+										"value": {
+											"value": "@pipeline().parameters.Subject",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"body": {
+										"value": {
+											"value": "@pipeline().parameters.Body",
+											"type": "Expression"
+										},
+										"type": "String"
+									}
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "EIL_MI_LOGGING_PROD",
+								"type": "LinkedServiceReference"
+							}
+						}
+					]
+				}
+			}
+		],
+		"parameters": {
+			"Recipients": {
+				"type": "string",
+				"defaultValue": "j.parks@snhu.edu;r.landrum@snhu.edu"
+			},
+			"Subject": {
+				"type": "string"
+			},
+			"Body": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "Utility"
+		},
+		"annotations": [],
+		"lastPublishTime": "2022-10-17T19:33:37Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

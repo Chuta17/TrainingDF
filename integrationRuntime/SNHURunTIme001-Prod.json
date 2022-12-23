@@ -1,0 +1,6 @@
+{
+	"name": "SNHURunTIme001-Prod",
+	"properties": {
+		"type": "SelfHosted"
+	}
+}

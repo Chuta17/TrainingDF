@@ -1,0 +1,34 @@
+{
+	"name": "D2LUnzipFilesProd",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "ADLG2_snhudatalake",
+			"type": "LinkedServiceReference"
+		},
+		"parameters": {
+			"FileNames": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "D2L_File_Datasets"
+		},
+		"annotations": [],
+		"type": "Binary",
+		"typeProperties": {
+			"location": {
+				"type": "AzureBlobFSLocation",
+				"fileName": {
+					"value": "@dataset().FileNames",
+					"type": "Expression"
+				},
+				"fileSystem": "d2ldailyfiles"
+			},
+			"compression": {
+				"type": "gzip",
+				"level": "Fastest"
+			}
+		}
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

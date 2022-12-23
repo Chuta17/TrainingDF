@@ -1,0 +1,23 @@
+{
+	"name": "EIL_MI_LOGGING_PROD",
+	"type": "Microsoft.DataFactory/factories/linkedservices",
+	"properties": {
+		"description": "Used for ADF pipeline and activity logging",
+		"annotations": [],
+		"type": "AzureSqlMI",
+		"typeProperties": {
+			"connectionString": {
+				"type": "AzureKeyVaultSecret",
+				"store": {
+					"referenceName": "KeyVault",
+					"type": "LinkedServiceReference"
+				},
+				"secretName": "EIL-MI-LOGGING-PROD"
+			}
+		},
+		"connectVia": {
+			"referenceName": "SNHURunTIme001-Prod",
+			"type": "IntegrationRuntimeReference"
+		}
+	}
+}

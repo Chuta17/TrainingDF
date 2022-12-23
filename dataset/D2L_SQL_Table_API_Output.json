@@ -1,0 +1,56 @@
+{
+	"name": "D2L_SQL_Table_API_Output",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "EIL_MI_D2L_Prod",
+			"type": "LinkedServiceReference"
+		},
+		"folder": {
+			"name": "D2L_File_Datasets"
+		},
+		"annotations": [],
+		"type": "AzureSqlMITable",
+		"schema": [
+			{
+				"name": "Pluginid",
+				"type": "nvarchar"
+			},
+			{
+				"name": "DSName",
+				"type": "nvarchar"
+			},
+			{
+				"name": "FullDataSet",
+				"type": "nvarchar"
+			},
+			{
+				"name": "CreatedDate",
+				"type": "datetime2",
+				"scale": 7
+			},
+			{
+				"name": "DownloadLink",
+				"type": "nvarchar"
+			},
+			{
+				"name": "DownloadSize",
+				"type": "int",
+				"precision": 10
+			},
+			{
+				"name": "Version",
+				"type": "nvarchar"
+			},
+			{
+				"name": "QueuedForProcessingDate",
+				"type": "datetime2",
+				"scale": 7
+			}
+		],
+		"typeProperties": {
+			"schema": "ETL",
+			"table": "D2L_Files_Paginated"
+		}
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

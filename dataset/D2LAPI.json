@@ -1,0 +1,19 @@
+{
+	"name": "D2LAPI",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "D2LRestAPI",
+			"type": "LinkedServiceReference"
+		},
+		"folder": {
+			"name": "D2L_File_Datasets"
+		},
+		"annotations": [],
+		"type": "RestResource",
+		"typeProperties": {
+			"relativeUrl": "/d2l/api/lp/1.30/dataExport/bds?pageSize=75"
+		},
+		"schema": []
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

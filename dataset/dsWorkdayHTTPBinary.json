@@ -1,0 +1,41 @@
+{
+	"name": "dsWorkdayHTTPBinary",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "lsHTTP_Workday",
+			"type": "LinkedServiceReference",
+			"parameters": {
+				"url": {
+					"value": "@dataset().url",
+					"type": "Expression"
+				},
+				"userName": {
+					"value": "@dataset().userName",
+					"type": "Expression"
+				},
+				"passwordSecretName": {
+					"value": "@dataset().passwordSecretName",
+					"type": "Expression"
+				}
+			}
+		},
+		"parameters": {
+			"url": {
+				"type": "string"
+			},
+			"userName": {
+				"type": "string"
+			},
+			"passwordSecretName": {
+				"type": "string"
+			}
+		},
+		"annotations": [],
+		"type": "Binary",
+		"typeProperties": {
+			"location": {
+				"type": "HttpServerLocation"
+			}
+		}
+	}
+}

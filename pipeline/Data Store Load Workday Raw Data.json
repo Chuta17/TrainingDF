@@ -1,0 +1,728 @@
+{
+	"name": "Data Store Load Workday Raw Data",
+	"properties": {
+		"description": "This Pipeline will load Workday Raw data to the Azure SQL Data Store Database from the Workday HCM API Custom Report.",
+		"activities": [
+			{
+				"name": "Wait 1 Second",
+				"type": "Wait",
+				"dependsOn": [
+					{
+						"activity": "WorkdayURL",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "WorkdayUser",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"waitTimeInSeconds": 1
+				}
+			},
+			{
+				"name": "WorkdayURL",
+				"type": "WebActivity",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 1,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": true,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"url": {
+						"value": "@concat('https://',pipeline().globalParameters.KeyVaultDW,'.vault.azure.net/secrets/WorkdayHCMURLCustom?api-version=7.0')",
+						"type": "Expression"
+					},
+					"method": "GET",
+					"authentication": {
+						"type": "MSI",
+						"resource": "https://vault.azure.net"
+					}
+				}
+			},
+			{
+				"name": "WorkdayUser",
+				"type": "WebActivity",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 1,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": true,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"url": {
+						"value": "@concat('https://',pipeline().globalParameters.KeyVaultDW,'.vault.azure.net/secrets/WorkdayHCMUserCustom?api-version=7.0')",
+						"type": "Expression"
+					},
+					"method": "GET",
+					"authentication": {
+						"type": "MSI",
+						"resource": "https://vault.azure.net"
+					}
+				}
+			},
+			{
+				"name": "GetTableList",
+				"description": "Lookup activity to retrieve the list of tables for Workday from the Control Table.",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "RunType Check",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 1,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": {
+							"value": "@concat('SELECT SourceSystem, SourceTable, DestinationTable, Query\nFROM ',pipeline().parameters.ControlTable,\n' WHERE SourceSystem = ''Workday HCM'' AND Enabled = 1',variables('RunTypeCondition'))",
+							"type": "Expression"
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "dsAzureSQLDataStoreDestination",
+						"type": "DatasetReference",
+						"parameters": {
+							"SchemaName": "etl",
+							"TableName": {
+								"value": "@pipeline().parameters.ControlTable",
+								"type": "Expression"
+							},
+							"ConnectionStringSecretName": {
+								"value": "@pipeline().parameters.DSConnectionStringSecretName",
+								"type": "Expression"
+							}
+						}
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "RunType Check",
+				"description": "Check the RunType parameter to condition the RunTypeCondition Variable",
+				"type": "Switch",
+				"dependsOn": [
+					{
+						"activity": "Wait 1 Second",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"on": {
+						"value": "@pipeline().parameters.RunType",
+						"type": "Expression"
+					},
+					"cases": [
+						{
+							"value": "Employee",
+							"activities": [
+								{
+									"name": "Set RunTypeCondition for Employee",
+									"description": "",
+									"type": "SetVariable",
+									"dependsOn": [],
+									"userProperties": [],
+									"typeProperties": {
+										"variableName": "RunTypeCondition",
+										"value": " AND EmployeeUpdate = 1"
+									}
+								}
+							]
+						}
+					],
+					"defaultActivities": [
+						{
+							"name": "Set RunTypeCondition for Master",
+							"description": "",
+							"type": "SetVariable",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "RunTypeCondition",
+								"value": " "
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "ForEachTable",
+				"description": "",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "GetTableList",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('GetTableList').output.value",
+						"type": "Expression"
+					},
+					"isSequential": false,
+					"batchCount": 5,
+					"activities": [
+						{
+							"name": "Storage to Stage Table",
+							"type": "Copy",
+							"dependsOn": [
+								{
+									"activity": "Get Column Mapping",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 1,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "XmlSource",
+									"storeSettings": {
+										"type": "AzureBlobStorageReadSettings",
+										"recursive": true,
+										"enablePartitionDiscovery": false
+									},
+									"formatSettings": {
+										"type": "XmlReadSettings",
+										"validationMode": "none",
+										"namespaces": true
+									}
+								},
+								"sink": {
+									"type": "AzureSqlSink",
+									"writeBehavior": "insert",
+									"sqlWriterUseTableLock": false,
+									"disableMetricsCollection": false
+								},
+								"enableStaging": false,
+								"translator": {
+									"value": "@json(activity('Get Column Mapping').output.firstRow.json_output)",
+									"type": "Expression"
+								}
+							},
+							"inputs": [
+								{
+									"referenceName": "dsWorkdayHCMStorageXML",
+									"type": "DatasetReference",
+									"parameters": {
+										"fileName": {
+											"value": "@concat(item().DestinationTable,'.xml')",
+											"type": "Expression"
+										},
+										"Directory": "HCM"
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "dsAzureSQLDataStoreDestination",
+									"type": "DatasetReference",
+									"parameters": {
+										"SchemaName": "Stage",
+										"TableName": {
+											"value": "@item().DestinationTable",
+											"type": "Expression"
+										},
+										"ConnectionStringSecretName": {
+											"value": "@pipeline().parameters.DSConnectionStringSecretName",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						},
+						{
+							"name": "Get Column Mapping",
+							"type": "Lookup",
+							"dependsOn": [
+								{
+									"activity": "Check StageRecordCount_Truncate",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 1,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderStoredProcedureName": "[etl].[uspGetColumnMapping]",
+									"storedProcedureParameters": {
+										"collection1": {
+											"type": "String",
+											"value": "wd:Report_Data"
+										},
+										"collection2": {
+											"type": "String",
+											"value": "wd:Report_Entry"
+										},
+										"schema_name": {
+											"type": "String",
+											"value": "Stage"
+										},
+										"table_name": {
+											"type": "String",
+											"value": {
+												"value": "@item().DestinationTable",
+												"type": "Expression"
+											}
+										}
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"dataset": {
+									"referenceName": "dsAzureSQLDataStoreDestination",
+									"type": "DatasetReference",
+									"parameters": {
+										"SchemaName": "Stage",
+										"TableName": {
+											"value": "@item().DestinationTable",
+											"type": "Expression"
+										},
+										"ConnectionStringSecretName": {
+											"value": "@pipeline().parameters.DSConnectionStringSecretName",
+											"type": "Expression"
+										}
+									}
+								}
+							}
+						},
+						{
+							"name": "Workday to Storage",
+							"type": "Copy",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 1,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "BinarySource",
+									"storeSettings": {
+										"type": "HttpReadSettings",
+										"requestMethod": "GET",
+										"additionalHeaders": "Content-Type: text/xml; charset=UTF-8",
+										"requestTimeout": "00:15:00"
+									},
+									"formatSettings": {
+										"type": "BinaryReadSettings"
+									}
+								},
+								"sink": {
+									"type": "BinarySink",
+									"storeSettings": {
+										"type": "AzureBlobStorageWriteSettings"
+									}
+								},
+								"enableStaging": false
+							},
+							"inputs": [
+								{
+									"referenceName": "dsWorkdayHTTPBinary",
+									"type": "DatasetReference",
+									"parameters": {
+										"url": {
+											"value": "@{concat(activity('WorkdayURL').output.value,item().Query)}",
+											"type": "Expression"
+										},
+										"userName": {
+											"value": "@activity('WorkdayUser').output.value",
+											"type": "Expression"
+										},
+										"passwordSecretName": "WorkdayHCMPassword"
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "dsWorkdayHCMStorageBinary",
+									"type": "DatasetReference",
+									"parameters": {
+										"fileName": {
+											"value": "@concat(item().DestinationTable,'.xml')",
+											"type": "Expression"
+										},
+										"Directory": "HCM"
+									}
+								}
+							]
+						},
+						{
+							"name": "Truncate Stage Table",
+							"type": "SqlServerStoredProcedure",
+							"dependsOn": [
+								{
+									"activity": "Workday to Storage",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 1,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"storedProcedureName": "[etl].[uspTruncateStageTable]",
+								"storedProcedureParameters": {
+									"strTable": {
+										"value": {
+											"value": "@item().DestinationTable",
+											"type": "Expression"
+										},
+										"type": "String"
+									}
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "lsAzureSqlDatabase_xuscedataazsql",
+								"type": "LinkedServiceReference",
+								"parameters": {
+									"ConnectionStringSecretName": {
+										"value": "@pipeline().parameters.DSConnectionStringSecretName",
+										"type": "Expression"
+									}
+								}
+							}
+						},
+						{
+							"name": "Get stg Count_Truncate",
+							"type": "Lookup",
+							"dependsOn": [
+								{
+									"activity": "Truncate Stage Table",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 1,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderQuery": {
+										"value": "@concat('SELECT COUNT(*) AS RecordCNT FROM Stage.',item().DestinationTable)",
+										"type": "Expression"
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"dataset": {
+									"referenceName": "dsAzureSQLDataStoreDestination",
+									"type": "DatasetReference",
+									"parameters": {
+										"SchemaName": "Stage",
+										"TableName": {
+											"value": "@item().DestinationTable",
+											"type": "Expression"
+										},
+										"ConnectionStringSecretName": {
+											"value": "@pipeline().parameters.DSConnectionStringSecretName",
+											"type": "Expression"
+										}
+									}
+								}
+							}
+						},
+						{
+							"name": "Set StageRecordCount_Truncate",
+							"type": "SetVariable",
+							"dependsOn": [
+								{
+									"activity": "Get stg Count_Truncate",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "StageRecordCount",
+								"value": {
+									"value": "@string(activity('Get stg Count_Truncate').output.firstRow.RecordCNT)",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "Check StageRecordCount_Truncate",
+							"description": "If Stage Record Count > 0 then Delete Records from the Stage Table",
+							"type": "IfCondition",
+							"dependsOn": [
+								{
+									"activity": "Set StageRecordCount_Truncate",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								},
+								{
+									"activity": "Set StageTableName",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"expression": {
+									"value": "@equals(variables('StageRecordCount'),'0')",
+									"type": "Expression"
+								},
+								"ifFalseActivities": [
+									{
+										"name": "Delete stg Records",
+										"type": "Lookup",
+										"dependsOn": [],
+										"policy": {
+											"timeout": "7.00:00:00",
+											"retry": 1,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"source": {
+												"type": "AzureSqlSource",
+												"sqlReaderQuery": {
+													"value": "@concat('DELETE FROM Stage.',variables('StageTableName'),'; SELECT 0;')",
+													"type": "Expression"
+												},
+												"queryTimeout": "02:00:00",
+												"partitionOption": "None"
+											},
+											"dataset": {
+												"referenceName": "dsAzureSQLDataStoreDestination",
+												"type": "DatasetReference",
+												"parameters": {
+													"SchemaName": "Stage",
+													"TableName": {
+														"value": "@variables('StageTableName')",
+														"type": "Expression"
+													},
+													"ConnectionStringSecretName": {
+														"value": "@pipeline().parameters.DSConnectionStringSecretName",
+														"type": "Expression"
+													}
+												}
+											}
+										}
+									}
+								]
+							}
+						},
+						{
+							"name": "Set StageTableName",
+							"type": "SetVariable",
+							"dependsOn": [
+								{
+									"activity": "Get stg Count_Truncate",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "StageTableName",
+								"value": {
+									"value": "@item().DestinationTable",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "Delete File from Storage",
+							"type": "Delete",
+							"dependsOn": [
+								{
+									"activity": "Storage to Stage Table",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 1,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"dataset": {
+									"referenceName": "dsWorkdayHCMStorageBinary",
+									"type": "DatasetReference",
+									"parameters": {
+										"fileName": {
+											"value": "@concat(item().DestinationTable,'.xml')",
+											"type": "Expression"
+										},
+										"Directory": "HCM"
+									}
+								},
+								"enableLogging": false,
+								"storeSettings": {
+									"type": "AzureBlobStorageReadSettings",
+									"recursive": true,
+									"enablePartitionDiscovery": false
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "ForEachTable-Delete from Storage",
+				"description": "",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "ForEachTable",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('GetTableList').output.value",
+						"type": "Expression"
+					},
+					"isSequential": false,
+					"batchCount": 5,
+					"activities": [
+						{
+							"name": "Delete File from Storage after Failure",
+							"type": "Delete",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 1,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"dataset": {
+									"referenceName": "dsWorkdayHCMStorageBinary",
+									"type": "DatasetReference",
+									"parameters": {
+										"fileName": {
+											"value": "@concat(item().DestinationTable,'.xml')",
+											"type": "Expression"
+										},
+										"Directory": "HCM"
+									}
+								},
+								"enableLogging": false,
+								"storeSettings": {
+									"type": "AzureBlobStorageReadSettings",
+									"recursive": true,
+									"enablePartitionDiscovery": false
+								}
+							}
+						}
+					]
+				}
+			}
+		],
+		"parameters": {
+			"RunType": {
+				"type": "string",
+				"defaultValue": "Master"
+			},
+			"ControlTable": {
+				"type": "string",
+				"defaultValue": "etl.vwSourceControlTableDelta"
+			},
+			"WorkdayISU": {
+				"type": "string",
+				"defaultValue": "Blattner"
+			},
+			"WorkdayTenantNumber": {
+				"type": "string"
+			},
+			"DSConnectionStringSecretName": {
+				"type": "string",
+				"defaultValue": "xuscedataazsql01-cs"
+			}
+		},
+		"variables": {
+			"StageRecordCount": {
+				"type": "String"
+			},
+			"RunTypeCondition": {
+				"type": "String"
+			},
+			"StageTableName": {
+				"type": "String"
+			}
+		},
+		"annotations": []
+	}
+}

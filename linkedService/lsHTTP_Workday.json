@@ -1,0 +1,39 @@
+{
+	"name": "lsHTTP_Workday",
+	"properties": {
+		"parameters": {
+			"url": {
+				"type": "string"
+			},
+			"userName": {
+				"type": "string"
+			},
+			"passwordSecretName": {
+				"type": "string"
+			}
+		},
+		"annotations": [],
+		"type": "HttpServer",
+		"typeProperties": {
+			"url": "@{linkedService().url}",
+			"enableServerCertificateValidation": true,
+			"authenticationType": "Basic",
+			"userName": "@{linkedService().userName}",
+			"password": {
+				"type": "AzureKeyVaultSecret",
+				"store": {
+					"referenceName": "lsAzureKeyVault_xxxusceadapkv",
+					"type": "LinkedServiceReference"
+				},
+				"secretName": {
+					"value": "@linkedService().passwordSecretName",
+					"type": "Expression"
+				}
+			}
+		},
+		"connectVia": {
+			"referenceName": "SelfHostedintegrationRuntime",
+			"type": "IntegrationRuntimeReference"
+		}
+	}
+}

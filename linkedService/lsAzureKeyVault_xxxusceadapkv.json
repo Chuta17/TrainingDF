@@ -1,0 +1,11 @@
+{
+	"name": "lsAzureKeyVault_xxxusceadapkv",
+	"properties": {
+		"description": "reference to adap key vault. DevOps pipeline overwrites value prior to production release",
+		"annotations": [],
+		"type": "AzureKeyVault",
+		"typeProperties": {
+			"baseUrl": "https://npdusceadapkv9bf987c46c2.vault.azure.net/"
+		}
+	}
+}

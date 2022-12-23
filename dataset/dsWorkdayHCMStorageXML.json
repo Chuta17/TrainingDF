@@ -1,0 +1,33 @@
+{
+	"name": "dsWorkdayHCMStorageXML",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "lsAzureBlobStorage_xxxusceadapsa2",
+			"type": "LinkedServiceReference"
+		},
+		"parameters": {
+			"fileName": {
+				"type": "string"
+			},
+			"Directory": {
+				"type": "string"
+			}
+		},
+		"annotations": [],
+		"type": "Xml",
+		"typeProperties": {
+			"location": {
+				"type": "AzureBlobStorageLocation",
+				"fileName": {
+					"value": "@dataset().fileName",
+					"type": "Expression"
+				},
+				"folderPath": {
+					"value": "@dataset().Directory",
+					"type": "Expression"
+				},
+				"container": "workday"
+			}
+		}
+	}
+}

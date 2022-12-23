@@ -1,0 +1,643 @@
+{
+	"name": "D2L_File_Download_Paginated_API",
+	"properties": {
+		"activities": [
+			{
+				"name": "Get token",
+				"description": "Use this Web activity to get bearer token",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "Get_RT",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"url": "https://auth.brightspace.com/core/connect/token",
+					"method": "POST",
+					"headers": {
+						"Content-Type": "application/x-www-form-urlencoded"
+					},
+					"body": {
+						"value": "@concat('grant_type=refresh_token&refresh_token=',activity('Get_RT').output.firstRow.RFT,'&client_id=a9cea0d8-801e-4478-bb35-b83afb3ae715&client_secret=RKD3CXIeSRvShQDiSfLOiahfhV9NBD7V68_F19mWYls')",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Get_RT",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SqlMISource",
+						"sqlReaderQuery": "Select RFT From D2L.ETL.Refreshvalue",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "D2L_SQL_Table_API_Output",
+						"type": "DatasetReference"
+					}
+				}
+			},
+			{
+				"name": "Download_D2L_Files",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "Get_Download_List_SQL",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('Get_Download_List_SQL').output.value",
+						"type": "Expression"
+					},
+					"isSequential": false,
+					"activities": [
+						{
+							"name": "Copy_Downloads_CSV",
+							"type": "Copy",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [
+								{
+									"name": "Filename",
+									"value": "d2ldailyfiles//@{item().FileNameZIP}"
+								},
+								{
+									"name": "httprequest",
+									"value": "@{item().DownLoadLink}"
+								}
+							],
+							"typeProperties": {
+								"source": {
+									"type": "BinarySource",
+									"storeSettings": {
+										"type": "HttpReadSettings",
+										"requestMethod": "GET",
+										"additionalHeaders": {
+											"value": "@{concat('Authorization: Bearer ',activity('Get token').output.access_token)}",
+											"type": "Expression"
+										},
+										"requestTimeout": ""
+									},
+									"formatSettings": {
+										"type": "BinaryReadSettings"
+									}
+								},
+								"sink": {
+									"type": "BinarySink",
+									"storeSettings": {
+										"type": "AzureBlobFSWriteSettings",
+										"copyBehavior": "PreserveHierarchy"
+									}
+								},
+								"enableStaging": false
+							},
+							"inputs": [
+								{
+									"referenceName": "D2LBinarySource",
+									"type": "DatasetReference",
+									"parameters": {
+										"DownloadLink": {
+											"value": "@{item().DownLoadLink}",
+											"type": "Expression"
+										}
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "D2LUnzipFilesProd",
+									"type": "DatasetReference",
+									"parameters": {
+										"FileNames": {
+											"value": "@item().FileNameZIP",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						}
+					]
+				}
+			},
+			{
+				"name": "Get_Download_List_SQL",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "GetBDSDownloadList",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SqlMISource",
+						"sqlReaderQuery": {
+							"value": "WITH CTE AS (\n\nSELECT Distinct\n\t   --'current' as dstype\n\t   d2lcurr.[Pluginid]\n\t   , REPLACE(REPLACE(DSName,' ',''),'Differential','') + '_' + [VERSION] + '_' + CASE WHEN FullDataSet = 'true' then 'Full' when FullDataSet = 'false' THEN 'Differential'  END \n + '_' + Format(CAST(CreatedDate as DATETIME),'yyyyMMdd_HHmmss') + '.zip' as FileNameZIP\n      ,d2lcurr.[DSName]\n      ,d2lcurr.[FullDataSet]\n      ,d2lcurr.[CreatedDate]\n      ,d2lcurr.[DownloadLink]      \n  FROM  [D2L].[ETL].[D2L_Files_Paginated] d2lcurr\n  WHERE CreatedDate >  '@{activity('GetLast_FileDate').output.firstrow.Create_Date}'\n  UNION ALL\n  Select Distinct\n\t\t--'Previous' as dstype\n  \t   d2lprev.[PrevPluginid]\n\t  , REPLACE(REPLACE(PrevDSName,' ',''),'Differential','') + '_' + [PrevVERSION] + '_' + CASE WHEN PrevFullDataSet = 'true' then 'Full' when PrevFullDataSet = 'false' THEN 'Differential'  END \n + '_' + Format(CAST(PrevCreatedDate as DATETIME),'yyyyMMdd_HHmmss') + '.zip' as FileNameZIP\n      ,d2lprev.[PrevDSName]\n      ,d2lprev.[PrevFullDataSet]\n      ,d2lprev.[PrevCreatedDate]\n      ,d2lprev.[PrevDownloadLink]\n\t  From\n [D2L].[ETL].[D2L_Files_Paginated] d2lprev \n where d2lprev.[PrevPluginid] is not null\n and CreatedDate >  '@{activity('GetLast_FileDate').output.firstrow.Create_Date}'\n-- order by dsname,CreatedDate desc\n)\n\nSelect Distinct FilenameZip,DownloadLink from CTE",
+							"type": "Expression"
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "D2L_SQL_Table_API_Output",
+						"type": "DatasetReference"
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "Update_RT",
+				"type": "SqlServerStoredProcedure",
+				"dependsOn": [
+					{
+						"activity": "Get token",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"storedProcedureName": "[ETL].[usp_update_token]",
+					"storedProcedureParameters": {
+						"RFT": {
+							"value": {
+								"value": "@activity('Get token').output.refresh_token",
+								"type": "Expression"
+							},
+							"type": "String"
+						}
+					}
+				},
+				"linkedServiceName": {
+					"referenceName": "EIL_MI_D2L_Prod",
+					"type": "LinkedServiceReference"
+				}
+			},
+			{
+				"name": "Update_LastFileTime",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "Download_D2L_Files",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SqlMISource",
+						"sqlReaderQuery": "Update D2L.[ETL].[D2L_Files_Last_Date]\nSet Create_Date = (\nSELECT \nmax(CreatedDate)\nFROM D2L.[ETL].[D2L_Files_Paginated]\n) Output Inserted.Create_Date",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "D2L_SQL_Table_API_Output",
+						"type": "DatasetReference"
+					}
+				}
+			},
+			{
+				"name": "GetLast_FileDate",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "Update_RT",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SqlMISource",
+						"sqlReaderQuery": "SELECT [LastRunDate]\n      ,[Create_Date]\n  FROM [D2L].[ETL].[D2L_Files_Last_Date]",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "D2L_SQL_Table_API_Output",
+						"type": "DatasetReference"
+					}
+				}
+			},
+			{
+				"name": "FailureToGetToken",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Get_RT",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "Send Email Alert",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"Recipients": {
+							"value": "@pipeline().globalParameters.EmailTo",
+							"type": "Expression"
+						},
+						"Subject": "D2L Get Token Failure Production",
+						"Body": "Check D2L File Download Pipeline as Token Refresh Failed"
+					}
+				}
+			},
+			{
+				"name": "FailedUpDateLastFileDate",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Update_LastFileTime",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "Send Email Alert",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"Recipients": {
+							"value": "@pipeline().globalParameters.EmailTo",
+							"type": "Expression"
+						},
+						"Subject": "Update Last File Created Date Failed",
+						"Body": "Check D2L_File_Download_Paginated as It Failed to Retrieve JSON Download List from Brightspace"
+					}
+				}
+			},
+			{
+				"name": "DownloadListFail",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "GetBDSDownloadList",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "Send Email Alert",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"Recipients": {
+							"value": "@pipeline().globalParameters.EmailTo",
+							"type": "Expression"
+						},
+						"Subject": "D2L Failed to Get BDS Download List JSON",
+						"Body": "Check D2L_File_Download_Paginated as It Failed to Retrieve JSON Download List from Brightspace"
+					}
+				}
+			},
+			{
+				"name": "GetBDSDownloadList",
+				"type": "Copy",
+				"dependsOn": [
+					{
+						"activity": "GetLast_FileDate",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "RestSource",
+						"httpRequestTimeout": "00:01:40",
+						"requestInterval": "00.00:00:00.010",
+						"requestMethod": "GET",
+						"additionalHeaders": {
+							"Authorization": {
+								"value": "@concat('Bearer ', activity('Get token').output.access_token)",
+								"type": "Expression"
+							},
+							"Content-Type": "application/json"
+						},
+						"paginationRules": {
+							"AbsoluteUrl": "$.NextPageUrl",
+							"supportRFC5988": "true"
+						}
+					},
+					"sink": {
+						"type": "SqlMISink",
+						"writeBehavior": "insert",
+						"sqlWriterUseTableLock": false
+					},
+					"enableStaging": false,
+					"translator": {
+						"type": "TabularTranslator",
+						"mappings": [
+							{
+								"source": {
+									"path": "['PreviousDataSets'][0]['PluginId']"
+								},
+								"sink": {
+									"name": "PrevPluginid",
+									"type": "String"
+								}
+							},
+							{
+								"source": {
+									"path": "['PreviousDataSets'][0]['Name']"
+								},
+								"sink": {
+									"name": "PrevDSName",
+									"type": "String"
+								}
+							},
+							{
+								"source": {
+									"path": "['PreviousDataSets'][0]['FullDataSet']"
+								},
+								"sink": {
+									"name": "PrevFullDataSet",
+									"type": "String"
+								}
+							},
+							{
+								"source": {
+									"path": "['PreviousDataSets'][0]['CreatedDate']"
+								},
+								"sink": {
+									"name": "PrevCreatedDate",
+									"type": "DateTime"
+								}
+							},
+							{
+								"source": {
+									"path": "['PreviousDataSets'][0]['DownloadLink']"
+								},
+								"sink": {
+									"name": "PrevDownloadLink",
+									"type": "String"
+								}
+							},
+							{
+								"source": {
+									"path": "['PreviousDataSets'][0]['DownloadSize']"
+								},
+								"sink": {
+									"name": "PrevDownloadSize",
+									"type": "String"
+								}
+							},
+							{
+								"source": {
+									"path": "['PreviousDataSets'][0]['Version']"
+								},
+								"sink": {
+									"name": "PrevVersion",
+									"type": "String"
+								}
+							},
+							{
+								"source": {
+									"path": "['PreviousDataSets'][0]['QueuedForProcessingDate']"
+								},
+								"sink": {
+									"name": "PrevQueuedForProcessing",
+									"type": "DateTime"
+								}
+							},
+							{
+								"source": {
+									"path": "['PluginId']"
+								},
+								"sink": {
+									"name": "Pluginid",
+									"type": "String"
+								}
+							},
+							{
+								"source": {
+									"path": "['Name']"
+								},
+								"sink": {
+									"name": "DSName",
+									"type": "String"
+								}
+							},
+							{
+								"source": {
+									"path": "['FullDataSet']"
+								},
+								"sink": {
+									"name": "FullDataSet",
+									"type": "String"
+								}
+							},
+							{
+								"source": {
+									"path": "['CreatedDate']"
+								},
+								"sink": {
+									"name": "CreatedDate",
+									"type": "DateTime"
+								}
+							},
+							{
+								"source": {
+									"path": "['DownloadLink']"
+								},
+								"sink": {
+									"name": "DownloadLink",
+									"type": "String"
+								}
+							},
+							{
+								"source": {
+									"path": "['DownloadSize']"
+								},
+								"sink": {
+									"name": "DownloadSize",
+									"type": "String"
+								}
+							},
+							{
+								"source": {
+									"path": "['Version']"
+								},
+								"sink": {
+									"name": "Version",
+									"type": "String"
+								}
+							},
+							{
+								"source": {
+									"path": "['QueuedForProcessingDate']"
+								},
+								"sink": {
+									"name": "QueuedForProcessingDate",
+									"type": "DateTime"
+								}
+							}
+						],
+						"collectionReference": "$['BrightspaceDataSets']"
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "D2LAPI",
+						"type": "DatasetReference"
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "D2L_SQL_Table_API_Output",
+						"type": "DatasetReference"
+					}
+				]
+			},
+			{
+				"name": "FailureToRefresh",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Get token",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "Send Email Alert",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"Recipients": {
+							"value": "@pipeline().globalParameters.EmailTo",
+							"type": "Expression"
+						},
+						"Subject": "D2L Get Token Failure Production",
+						"Body": {
+							"value": "@concat('Check D2L File Download Pipeline as Token Refresh Failed ',pipeline().Pipeline)",
+							"type": "Expression"
+						}
+					}
+				}
+			}
+		],
+		"parameters": {
+			"SinkContainer": {
+				"type": "string",
+				"defaultValue": "na"
+			},
+			"SinkDirectory": {
+				"type": "string",
+				"defaultValue": "na"
+			},
+			"Load_Type_Full_Diff_All": {
+				"type": "string"
+			},
+			"LoadFull": {
+				"type": "string",
+				"defaultValue": "False"
+			}
+		},
+		"variables": {
+			"JSONBSOutput": {
+				"type": "Array"
+			}
+		},
+		"folder": {
+			"name": "D2L_File_Download"
+		},
+		"annotations": [],
+		"lastPublishTime": "2022-11-01T22:19:03Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

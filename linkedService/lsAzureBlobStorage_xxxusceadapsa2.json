@@ -1,0 +1,16 @@
+{
+	"name": "lsAzureBlobStorage_xxxusceadapsa2",
+	"properties": {
+		"description": "Azure adap Blob Storage Account for the Data Store -- Uses System Assigned Managed Identity",
+		"annotations": [],
+		"type": "AzureBlobStorage",
+		"typeProperties": {
+			"serviceEndpoint": "https://npdusceadapsa9bf987c46c2.blob.core.windows.net",
+			"accountKind": "StorageV2"
+		},
+		"connectVia": {
+			"referenceName": "SelfHostedintegrationRuntime",
+			"type": "IntegrationRuntimeReference"
+		}
+	}
+}

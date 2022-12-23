@@ -1,0 +1,31 @@
+{
+	"name": "lsAzureSqlDatabase_xuscedataazsql",
+	"properties": {
+		"description": "Azure SQL Data Store Database -- routing handled by Key Vault Linked Service",
+		"parameters": {
+			"ConnectionStringSecretName": {
+				"type": "string",
+				"defaultValue": "xuscedataazsql01-cs"
+			}
+		},
+		"annotations": [],
+		"type": "AzureSqlDatabase",
+		"typeProperties": {
+			"connectionString": {
+				"type": "AzureKeyVaultSecret",
+				"store": {
+					"referenceName": "lsAzureKeyVault_xxxusceadapkv",
+					"type": "LinkedServiceReference"
+				},
+				"secretName": {
+					"value": "@linkedService().ConnectionStringSecretName",
+					"type": "Expression"
+				}
+			}
+		},
+		"connectVia": {
+			"referenceName": "SelfHostedintegrationRuntime",
+			"type": "IntegrationRuntimeReference"
+		}
+	}
+}

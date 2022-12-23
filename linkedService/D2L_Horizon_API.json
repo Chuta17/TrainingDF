@@ -1,0 +1,27 @@
+{
+	"name": "D2L_Horizon_API",
+	"type": "Microsoft.DataFactory/factories/linkedservices",
+	"properties": {
+		"parameters": {
+			"D2LDownLoadURL": {
+				"type": "string"
+			}
+		},
+		"annotations": [],
+		"type": "HttpServer",
+		"typeProperties": {
+			"url": "@{linkedService().D2LDownLoadURL}",
+			"enableServerCertificateValidation": true,
+			"authenticationType": "Basic",
+			"userName": "SNHU_API_Service_001",
+			"password": {
+				"type": "AzureKeyVaultSecret",
+				"store": {
+					"referenceName": "KeyVault",
+					"type": "LinkedServiceReference"
+				},
+				"secretName": "D2LHorizon-API-Password"
+			}
+		}
+	}
+}

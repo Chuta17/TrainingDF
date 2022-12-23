@@ -1,0 +1,22 @@
+{
+	"name": "EIL_MI_D2L_Prod",
+	"type": "Microsoft.DataFactory/factories/linkedservices",
+	"properties": {
+		"annotations": [],
+		"type": "AzureSqlMI",
+		"typeProperties": {
+			"connectionString": {
+				"type": "AzureKeyVaultSecret",
+				"store": {
+					"referenceName": "KeyVault",
+					"type": "LinkedServiceReference"
+				},
+				"secretName": "EIL-MI-D2L-PROD"
+			}
+		},
+		"connectVia": {
+			"referenceName": "SNHURunTIme001-Prod",
+			"type": "IntegrationRuntimeReference"
+		}
+	}
+}
