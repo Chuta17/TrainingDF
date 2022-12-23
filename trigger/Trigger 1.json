@@ -3,18 +3,7 @@
 	"properties": {
 		"annotations": [],
 		"runtimeState": "Started",
-		"pipelines": [
-			{
-				"pipelineReference": {
-					"referenceName": "DataverseToSQL",
-					"type": "PipelineReference"
-				},
-				"parameters": {
-					"container": "dataverse-iwsservices-iwsmexico",
-					"folder": "/"
-				}
-			}
-		],
+		"pipelines": [],
 		"type": "BlobEventsTrigger",
 		"typeProperties": {
 			"blobPathBeginsWith": "/dataverse-iwsservices-iwsmexico/blobs/model",
