@@ -1,5 +1,5 @@
 {
-	"name": "Data Store Load Workday Raw Data",
+	"name": "7920 Truncate",
 	"properties": {
 		"description": "This Pipeline will load Workday Raw data to the Azure SQL Data Store Database from the Workday HCM API Custom Report.",
 		"activities": [
