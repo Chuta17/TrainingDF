@@ -1,0 +1,32 @@
+{
+	"name": "dataflow2",
+	"properties": {
+		"type": "MappingDataFlow",
+		"typeProperties": {
+			"sources": [
+				{
+					"linkedService": {
+						"referenceName": "LSAribaTest",
+						"type": "LinkedServiceReference"
+					},
+					"name": "AribaAPITest"
+				}
+			],
+			"sinks": [],
+			"transformations": [],
+			"scriptLines": [
+				"source(allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     format: 'rest',",
+				"     timeout: 30,",
+				"     requestInterval: 0,",
+				"     entity: 'contractWorkspaces',",
+				"     headers: ['apiKey' -> 'mO6pOumOfrNgRy06DG5eiywRFqPeDOOG', 'Authorization' -> 'Bearer {(accesToken)}'],",
+				"     queryParameters: ['user' -> 'customersupportadmin', 'passwordAdapter' -> 'PasswordAdapter1', 'realm' -> 'venetian'],",
+				"     httpMethod: 'GET',",
+				"     paginationRules: ['supportRFC5988' -> 'true'],",
+				"     responseFormat: ['type' -> 'json', 'documentForm' -> 'documentPerLine']) ~> AribaAPITest"
+			]
+		}
+	}
+}

@@ -1,0 +1,20 @@
+{
+	"name": "ds_ASQL_GetSetMetadata",
+	"properties": {
+		"description": "Single generic dataset used to get and set all database metadata.",
+		"linkedServiceName": {
+			"referenceName": "ls_ASQL_ProcessFramework",
+			"type": "LinkedServiceReference"
+		},
+		"folder": {
+			"name": "ProcessFramework"
+		},
+		"annotations": [],
+		"type": "AzureSqlTable",
+		"schema": [],
+		"typeProperties": {
+			"schema": "dbo",
+			"table": "DataExtract"
+		}
+	}
+}

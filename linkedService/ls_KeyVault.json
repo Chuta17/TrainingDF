@@ -1,0 +1,12 @@
+{
+	"name": "ls_KeyVault",
+	"type": "Microsoft.DataFactory/factories/linkedservices",
+	"properties": {
+		"annotations": [],
+		"type": "AzureKeyVault",
+		"typeProperties": {
+			"baseUrl": "https://azAnalyticsKeyVault-Prod.vault.azure.net/"
+		},
+		"description": "Managed by Analytics"
+	}
+}

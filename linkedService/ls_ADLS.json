@@ -1,0 +1,15 @@
+{
+	"name": "ls_ADLS",
+	"properties": {
+		"annotations": [],
+		"type": "AzureBlobFS",
+		"typeProperties": {
+			"url": "https://azstganalyticsdev001.dfs.core.windows.net/"
+		},
+		"connectVia": {
+			"referenceName": "IR-PRIVATE-RUNTIME",
+			"type": "IntegrationRuntimeReference"
+		}
+	},
+	"type": "Microsoft.DataFactory/factories/linkedservices"
+}

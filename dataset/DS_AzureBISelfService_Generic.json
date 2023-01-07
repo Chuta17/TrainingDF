@@ -1,0 +1,17 @@
+{
+	"name": "DS_AzureBISelfService_Generic",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "LS_ASQL_PROD_AzureBISelfService",
+			"type": "LinkedServiceReference"
+		},
+		"annotations": [],
+		"type": "AzureSqlTable",
+		"schema": [],
+		"typeProperties": {
+			"schema": "dbo",
+			"table": "T_BISelfServiceDBLoad_InputParam"
+		}
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

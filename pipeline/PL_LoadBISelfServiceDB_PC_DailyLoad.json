@@ -1,0 +1,1030 @@
+{
+	"name": "PL_LoadBISelfServiceDB_PC_DailyLoad",
+	"properties": {
+		"activities": [
+			{
+				"name": "LookupTableList",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "LookupLoadStartDate",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 3,
+					"retryIntervalInSeconds": 60,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": "SELECT distinct  TABLE_SCHEMA, TABLE_NAME FROM information_schema.columns WHERE \n\n(Table_Schema = 'PC' and Table_Name not like 'pctl_%' and column_name = 'updatetime') \n\nor table_name = 'pc_history'\n",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "DS_AzureBIHistory_Generic",
+						"type": "DatasetReference"
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "LoopThroughEachPCTable",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "LookupTableList",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('LookupTableList').output.value",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "Mark Table as Processing",
+							"type": "Lookup",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 3,
+								"retryIntervalInSeconds": 60,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderQuery": {
+										"value": "insert into dbo.T_BISelfServiceDB_LoadStats (PipelineName, TableSchema, TableName, CurrentLoadStatus, LoadStartDate) values ('@{pipeline().Pipeline}','@{item().Table_Schema}','@{item().Table_Name}','Processing',getdate())\n\nselect 1",
+										"type": "Expression"
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"dataset": {
+									"referenceName": "DS_AzureBISelfService_Generic",
+									"type": "DatasetReference"
+								}
+							}
+						},
+						{
+							"name": "If Condition1",
+							"type": "IfCondition",
+							"dependsOn": [
+								{
+									"activity": "Mark Table as Processing",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"expression": {
+									"value": "@equals(item().table_name,'pc_history')",
+									"type": "Expression"
+								},
+								"ifFalseActivities": [
+									{
+										"name": "GetLatestData_copy",
+										"type": "ExecuteDataFlow",
+										"dependsOn": [],
+										"policy": {
+											"timeout": "7.00:00:00",
+											"retry": 3,
+											"retryIntervalInSeconds": 60,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"dataflow": {
+												"referenceName": "ExtractLoadLatestRecords_PC_DailyLoad",
+												"type": "DataFlowReference",
+												"parameters": {
+													"TableName": {
+														"value": "'@{item().Table_Name}'",
+														"type": "Expression"
+													},
+													"SchemaName": {
+														"value": "'@{item().Table_Schema}'",
+														"type": "Expression"
+													},
+													"LoadStartDate": {
+														"value": "'@{activity('LookupLoadStartDate').output.value[0].LoadStartDate}'",
+														"type": "Expression"
+													}
+												},
+												"datasetParameters": {
+													"InsertUpdateRecords": {
+														"TableSchema": "PC_Daily",
+														"TableName": {
+															"value": "@concat('v_',item().table_Name)",
+															"type": "Expression"
+														}
+													},
+													"DeleteRecords": {
+														"TableSchema": "PC_Daily",
+														"TableName": {
+															"value": "@concat('v_',item().table_Name)",
+															"type": "Expression"
+														}
+													}
+												}
+											},
+											"compute": {
+												"coreCount": 8,
+												"computeType": "General"
+											},
+											"traceLevel": "Fine"
+										}
+									},
+									{
+										"name": "Mark Table as Processed",
+										"type": "Lookup",
+										"dependsOn": [
+											{
+												"activity": "GetLatestData_copy",
+												"dependencyConditions": [
+													"Succeeded"
+												]
+											}
+										],
+										"policy": {
+											"timeout": "7.00:00:00",
+											"retry": 3,
+											"retryIntervalInSeconds": 60,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"source": {
+												"type": "AzureSqlSource",
+												"sqlReaderQuery": {
+													"value": "declare @activityOutput varchar(max)\nset @activityOutput = '@{activity('GetLatestData_copy').output.runStatus.metrics}'\n\nupdate dbo.T_BISelfServiceDB_LoadStats\nset CurrentLoadStatus = 'Processed', LoadEndDate = getdate(),\nrowsUpserted = case when json_value(@activityOutput, '$.InsertUpdateRecords.rowsWritten') is null\n\t\t\tthen null\n\t\telse json_value(@activityOutput, '$.InsertUpdateRecords.rowsWritten')\n\t\tend,\nrowsReadForUpsert = case when json_value(@activityOutput, '$.InsertUpdateRecords.sources.GetActiveRecords.rowsRead') is null\n\t\t\tthen null\n\t\telse json_value(@activityOutput, '$.InsertUpdateRecords.sources.GetActiveRecords.rowsRead')\n\t\tend,   \nrowsDeleted = case when json_value(@activityOutput, '$.DeleteRecords.rowsWritten') is null\n\t\t\tthen null\n\t\telse json_value(@activityOutput, '$.DeleteRecords.rowsWritten')\n\t\tend,\nrowsReadForDelete = case when json_value(@activityOutput, '$.DeleteRecords.sources.GetDeletedRecords.rowsRead') is null\n\t\t\tthen null\n\t\t    else json_value(@activityOutput, '$.DeleteRecords.sources.GetDeletedRecords.rowsRead')\n\t\t    end\nwhere TableSchema = '@{item().TABLE_SCHEMA}' and TableName = '@{item().TABLE_NAME}'\nand cast(LoadStartDate as date) = cast(getdate() as date)\nand PipelineName = '@{pipeline().Pipeline}'\nand CurrentLoadStatus = 'Processing'\n\nselect 1",
+													"type": "Expression"
+												},
+												"queryTimeout": "02:00:00",
+												"partitionOption": "None"
+											},
+											"dataset": {
+												"referenceName": "DS_AzureBISelfService_Generic",
+												"type": "DatasetReference"
+											}
+										}
+									},
+									{
+										"name": "Mark Table as Failed",
+										"type": "Lookup",
+										"dependsOn": [
+											{
+												"activity": "GetLatestData_copy",
+												"dependencyConditions": [
+													"Failed"
+												]
+											}
+										],
+										"policy": {
+											"timeout": "7.00:00:00",
+											"retry": 3,
+											"retryIntervalInSeconds": 60,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"source": {
+												"type": "AzureSqlSource",
+												"sqlReaderQuery": {
+													"value": "update dbo.T_BISelfServiceDB_LoadStats\nset CurrentLoadStatus = 'Failed', LoadEndDate = getdate()\nwhere TableSchema = '@{item().TABLE_SCHEMA}' and TableName = '@{item().TABLE_NAME}'\nand cast(LoadStartDate as date) = cast(getdate() as date)\nand PipelineName = '@{pipeline().Pipeline}'\nand CurrentLoadStatus = 'Processing'\n\nselect 1",
+													"type": "Expression"
+												},
+												"queryTimeout": "02:00:00",
+												"partitionOption": "None"
+											},
+											"dataset": {
+												"referenceName": "DS_AzureBISelfService_Generic",
+												"type": "DatasetReference"
+											}
+										}
+									}
+								],
+								"ifTrueActivities": [
+									{
+										"name": "GetLatestData_PC_HistoryTable",
+										"type": "ExecuteDataFlow",
+										"dependsOn": [],
+										"policy": {
+											"timeout": "7.00:00:00",
+											"retry": 3,
+											"retryIntervalInSeconds": 60,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"dataflow": {
+												"referenceName": "ExtractLoadLatestRecords_PC_History_DailyLoad",
+												"type": "DataFlowReference",
+												"parameters": {
+													"TableName": {
+														"value": "'@{item().Table_Name}'",
+														"type": "Expression"
+													},
+													"SchemaName": {
+														"value": "'@{item().Table_Schema}'",
+														"type": "Expression"
+													},
+													"LoadStartDate": {
+														"value": "'@{activity('LookupLoadStartDate').output.value[0].LoadStartDate}'",
+														"type": "Expression"
+													}
+												},
+												"datasetParameters": {
+													"InsertUpdateRecords": {
+														"TableSchema": "PC_Daily",
+														"TableName": {
+															"value": "@concat('v_',item().table_Name)",
+															"type": "Expression"
+														}
+													},
+													"DeleteRecords": {
+														"TableSchema": "PC_Daily",
+														"TableName": {
+															"value": "@concat('v_',item().table_Name)",
+															"type": "Expression"
+														}
+													}
+												}
+											},
+											"compute": {
+												"coreCount": 8,
+												"computeType": "General"
+											},
+											"traceLevel": "Fine"
+										}
+									},
+									{
+										"name": "Mark Table as Processed PC_History",
+										"type": "Lookup",
+										"dependsOn": [
+											{
+												"activity": "GetLatestData_PC_HistoryTable",
+												"dependencyConditions": [
+													"Succeeded"
+												]
+											}
+										],
+										"policy": {
+											"timeout": "7.00:00:00",
+											"retry": 3,
+											"retryIntervalInSeconds": 60,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"source": {
+												"type": "AzureSqlSource",
+												"sqlReaderQuery": {
+													"value": "declare @activityOutput varchar(max)\nset @activityOutput = '@{activity('GetLatestData_PC_HistoryTable').output.runStatus.metrics}'\n\nupdate dbo.T_BISelfServiceDB_LoadStats\nset CurrentLoadStatus = 'Processed', LoadEndDate = getdate(),\nrowsUpserted = case when json_value(@activityOutput, '$.InsertUpdateRecords.rowsWritten') is null\n\t\t\tthen null\n\t\telse json_value(@activityOutput, '$.InsertUpdateRecords.rowsWritten')\n\t\tend,\nrowsReadForUpsert = case when json_value(@activityOutput, '$.InsertUpdateRecords.sources.GetActiveRecords.rowsRead') is null\n\t\t\tthen null\n\t\telse json_value(@activityOutput, '$.InsertUpdateRecords.sources.GetActiveRecords.rowsRead')\n\t\tend,   \nrowsDeleted = case when json_value(@activityOutput, '$.DeleteRecords.rowsWritten') is null\n\t\t\tthen null\n\t\telse json_value(@activityOutput, '$.DeleteRecords.rowsWritten')\n\t\tend,\nrowsReadForDelete = case when json_value(@activityOutput, '$.DeleteRecords.sources.GetDeletedRecords.rowsRead') is null\n\t\t\tthen null\n\t\t    else json_value(@activityOutput, '$.DeleteRecords.sources.GetDeletedRecords.rowsRead')\n\t\t    end\nwhere TableSchema = '@{item().TABLE_SCHEMA}' and TableName = '@{item().TABLE_NAME}'\nand cast(LoadStartDate as date) = cast(getdate() as date)\nand PipelineName = '@{pipeline().Pipeline}'\nand CurrentLoadStatus = 'Processing'\n\nselect 1",
+													"type": "Expression"
+												},
+												"queryTimeout": "02:00:00",
+												"partitionOption": "None"
+											},
+											"dataset": {
+												"referenceName": "DS_AzureBISelfService_Generic",
+												"type": "DatasetReference"
+											}
+										}
+									},
+									{
+										"name": "Mark Table as Failed  PC_History",
+										"type": "Lookup",
+										"dependsOn": [
+											{
+												"activity": "GetLatestData_PC_HistoryTable",
+												"dependencyConditions": [
+													"Failed"
+												]
+											}
+										],
+										"policy": {
+											"timeout": "7.00:00:00",
+											"retry": 3,
+											"retryIntervalInSeconds": 60,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"source": {
+												"type": "AzureSqlSource",
+												"sqlReaderQuery": {
+													"value": "update dbo.T_BISelfServiceDB_LoadStats\nset CurrentLoadStatus = 'Failed', LoadEndDate = getdate()\nwhere TableSchema = '@{item().TABLE_SCHEMA}' and TableName = '@{item().TABLE_NAME}'\nand cast(LoadStartDate as date) = cast(getdate() as date)\nand PipelineName = '@{pipeline().Pipeline}'\nand CurrentLoadStatus = 'Processing'\n\nselect 1",
+													"type": "Expression"
+												},
+												"queryTimeout": "02:00:00",
+												"partitionOption": "None"
+											},
+											"dataset": {
+												"referenceName": "DS_AzureBISelfService_Generic",
+												"type": "DatasetReference"
+											}
+										}
+									}
+								]
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "LookupLoadStartDate",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 3,
+					"retryIntervalInSeconds": 60,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": "select LoadStartDate\nfrom dbo.T_BISelfServiceDBLoad_InputParam\nwhere LoadSchema = 'PC_Daily'",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "DS_AzureBISelfService_Generic",
+						"type": "DatasetReference"
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "LookupTLTableList",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "LookupLoadStartDate",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 3,
+					"retryIntervalInSeconds": 60,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": "SELECT  TABLE_SCHEMA, TABLE_NAME \nFROM information_schema.TABLES \nWHERE  Table_Schema = 'PC' and \n(Table_Name like 'pctl_%') \n",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "DS_AzureBIHistory_Generic",
+						"type": "DatasetReference"
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "LoopThroughEachTLTable",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "LookupTLTableList",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('LookupTLTableList').output.value",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "Mark TL Table as Processing",
+							"type": "Lookup",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 3,
+								"retryIntervalInSeconds": 60,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderQuery": {
+										"value": "insert into dbo.T_BISelfServiceDB_LoadStats (PipelineName, TableSchema, TableName, CurrentLoadStatus, LoadStartDate) values ('@{pipeline().Pipeline}','@{item().Table_Schema}','@{item().Table_Name}','Processing',getdate())\n\nselect 1",
+										"type": "Expression"
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"dataset": {
+									"referenceName": "DS_AzureBISelfService_Generic",
+									"type": "DatasetReference"
+								}
+							}
+						},
+						{
+							"name": "Mark TL Table as Processed",
+							"type": "Lookup",
+							"dependsOn": [
+								{
+									"activity": "CreatePKIndex_NonGeographyTable",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 3,
+								"retryIntervalInSeconds": 60,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderQuery": {
+										"value": "update dbo.T_BISelfServiceDB_LoadStats\nset CurrentLoadStatus = 'Processed', LoadEndDate = getdate()\n,rowsInserted = @{activity('Drop and Recreate TL Tables').output.rowsCopied}\n,rowsRead = @{activity('Drop and Recreate TL Tables').output.rowsRead}\nwhere TableSchema = '@{item().TABLE_SCHEMA}' and TableName = '@{item().TABLE_NAME}'\nand cast(LoadStartDate as date) = cast(getdate() as date)\nand PipelineName = '@{pipeline().Pipeline}'\nand CurrentLoadStatus = 'Processing'\n\nselect 1",
+										"type": "Expression"
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"dataset": {
+									"referenceName": "DS_AzureBISelfService_Generic",
+									"type": "DatasetReference"
+								}
+							}
+						},
+						{
+							"name": "Mark TL Table as Failed",
+							"type": "Lookup",
+							"dependsOn": [
+								{
+									"activity": "Drop and Recreate TL Tables",
+									"dependencyConditions": [
+										"Failed"
+									]
+								},
+								{
+									"activity": "CleanupInfrastructureFields",
+									"dependencyConditions": [
+										"Failed"
+									]
+								},
+								{
+									"activity": "SetIDToNotNull",
+									"dependencyConditions": [
+										"Failed"
+									]
+								},
+								{
+									"activity": "CreatePKIndex_NonGeographyTable",
+									"dependencyConditions": [
+										"Failed"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 3,
+								"retryIntervalInSeconds": 60,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderQuery": {
+										"value": "update dbo.T_BISelfServiceDB_LoadStats\nset CurrentLoadStatus = 'Failed', LoadEndDate = getdate()\nwhere TableSchema = '@{item().TABLE_SCHEMA}' and TableName = '@{item().TABLE_NAME}'\nand cast(LoadStartDate as date) = cast(getdate() as date)\nand PipelineName = '@{pipeline().Pipeline}'\nand CurrentLoadStatus = 'Processing'\n\nselect 1",
+										"type": "Expression"
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"dataset": {
+									"referenceName": "DS_AzureBISelfService_Generic",
+									"type": "DatasetReference"
+								}
+							}
+						},
+						{
+							"name": "Drop and Recreate TL Tables",
+							"type": "Copy",
+							"dependsOn": [
+								{
+									"activity": "Mark TL Table as Processing",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 3,
+								"retryIntervalInSeconds": 60,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderQuery": {
+										"value": "select * from [@{item().Table_Schema}].[@{item().Table_Name}]\nwhere deleteIndicator = 'N' and currentIndicator = 'Y'",
+										"type": "Expression"
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"sink": {
+									"type": "AzureSqlSink",
+									"writeBatchSize": 100000,
+									"preCopyScript": {
+										"value": "@{concat('drop table if exists PC_Daily.v_',item().Table_Name)}",
+										"type": "Expression"
+									},
+									"tableOption": "autoCreate",
+									"disableMetricsCollection": false
+								},
+								"enableStaging": false,
+								"parallelCopies": 8,
+								"translator": {
+									"type": "TabularTranslator",
+									"typeConversion": true,
+									"typeConversionSettings": {
+										"allowDataTruncation": true,
+										"treatBooleanAsNumber": false
+									}
+								}
+							},
+							"inputs": [
+								{
+									"referenceName": "DS_AzureBIHistory_Generic",
+									"type": "DatasetReference"
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "DS_AzureBISelfService_Generic_wParameters",
+									"type": "DatasetReference",
+									"parameters": {
+										"TableSchema": "PC_Daily",
+										"TableName": {
+											"value": "@concat('v_',item().Table_Name)",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						},
+						{
+							"name": "CleanupInfrastructureFields",
+							"type": "Lookup",
+							"dependsOn": [
+								{
+									"activity": "Drop and Recreate TL Tables",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 3,
+								"retryIntervalInSeconds": 60,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderQuery": {
+										"value": "Alter table @{concat('PC_Daily.v_',item().Table_Name)}  drop column currentIndicator, RowEffectiveDate, RowExpirationDate, ADFCreatetime, ADFUpdatetime, DeleteIndicator\n\nselect 1",
+										"type": "Expression"
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"dataset": {
+									"referenceName": "DS_AzureBISelfService_Generic",
+									"type": "DatasetReference"
+								}
+							}
+						},
+						{
+							"name": "CreatePKIndex_NonGeographyTable",
+							"type": "Lookup",
+							"dependsOn": [
+								{
+									"activity": "SetIDToNotNull",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 3,
+								"retryIntervalInSeconds": 60,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderQuery": {
+										"value": "ALTER TABLE @{concat('PC_Daily.v_',item().Table_Name)} ADD CONSTRAINT @{concat(item().Table_Name,'_PK')} PRIMARY KEY CLUSTERED ( ID ASC  ) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, FILLFACTOR = 90) ON [PRIMARY]\n\nselect 1",
+										"type": "Expression"
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"dataset": {
+									"referenceName": "DS_AzureBISelfService_Generic",
+									"type": "DatasetReference"
+								}
+							}
+						},
+						{
+							"name": "SetIDToNotNull",
+							"type": "Lookup",
+							"dependsOn": [
+								{
+									"activity": "CleanupInfrastructureFields",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 3,
+								"retryIntervalInSeconds": 60,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderQuery": {
+										"value": "alter table @{concat('PC_Daily.v_',item().Table_Name)} alter column ID bigint NOT NULL\n\nselect 1",
+										"type": "Expression"
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"dataset": {
+									"referenceName": "DS_AzureBISelfService_Generic",
+									"type": "DatasetReference"
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "LookupTableList_SpecialTables",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "LookupLoadStartDate",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 3,
+					"retryIntervalInSeconds": 60,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": "SELECT  TABLE_SCHEMA, TABLE_NAME \nFROM information_schema.TABLES \nWHERE Table_Schema = 'PC'\nand table_name not in ( select distinct table_name\n\t\t\t\t\t\tfrom information_schema.columns\n\t\t\t\t\t\twhere table_schema = 'PC' and column_name = 'updatetime'\n\t\t\t\t\t\t)\nand (Table_Name not like 'pctl_%')\nand (Table_name <> 'pc_history')",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "DS_AzureBIHistory_Generic",
+						"type": "DatasetReference"
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "LoopThroughEachPCTable_SpecialTables",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "LookupTableList_SpecialTables",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('LookupTableList_SpecialTables').output.value",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "Mark Table as Processing_SpecialTables",
+							"type": "Lookup",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 3,
+								"retryIntervalInSeconds": 60,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderQuery": {
+										"value": "insert into dbo.T_BISelfServiceDB_LoadStats (PipelineName, TableSchema, TableName, CurrentLoadStatus, LoadStartDate) values ('@{pipeline().Pipeline}','@{item().Table_Schema}','@{item().Table_Name}','Processing',getdate())\n\nselect 1",
+										"type": "Expression"
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"dataset": {
+									"referenceName": "DS_AzureBISelfService_Generic",
+									"type": "DatasetReference"
+								}
+							}
+						},
+						{
+							"name": "Mark Table as Processed_SpecialTables",
+							"type": "Lookup",
+							"dependsOn": [
+								{
+									"activity": "GetLatestData_SpecialTables",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 3,
+								"retryIntervalInSeconds": 60,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderQuery": {
+										"value": "declare @activityOutput varchar(max)\nset @activityOutput = '@{activity('GetLatestData_SpecialTables').output.runStatus.metrics}'\n\nupdate dbo.T_BISelfServiceDB_LoadStats\nset CurrentLoadStatus = 'Processed', LoadEndDate = getdate(),\nrowsUpserted = case when json_value(@activityOutput, '$.InsertUpdateRecords.rowsWritten') is null\n\t\t\tthen null\n\t\telse json_value(@activityOutput, '$.InsertUpdateRecords.rowsWritten')\n\t\tend,\nrowsReadForUpsert = case when json_value(@activityOutput, '$.InsertUpdateRecords.sources.GetActiveRecords.rowsRead') is null\n\t\t\tthen null\n\t\telse json_value(@activityOutput, '$.InsertUpdateRecords.sources.GetActiveRecords.rowsRead')\n\t\tend,   \nrowsDeleted = case when json_value(@activityOutput, '$.DeleteRecords.rowsWritten') is null\n\t\t\tthen null\n\t\telse json_value(@activityOutput, '$.DeleteRecords.rowsWritten')\n\t\tend,\nrowsReadForDelete = case when json_value(@activityOutput, '$.DeleteRecords.sources.GetDeletedRecords.rowsRead') is null\n\t\t\tthen null\n\t\t    else json_value(@activityOutput, '$.DeleteRecords.sources.GetDeletedRecords.rowsRead')\n\t\t    end\nwhere TableSchema = '@{item().TABLE_SCHEMA}' and TableName = '@{item().TABLE_NAME}'\nand cast(LoadStartDate as date) = cast(getdate() as date)\nand PipelineName = '@{pipeline().Pipeline}'\nand CurrentLoadStatus = 'Processing'\n\nselect 1",
+										"type": "Expression"
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"dataset": {
+									"referenceName": "DS_AzureBISelfService_Generic",
+									"type": "DatasetReference"
+								}
+							}
+						},
+						{
+							"name": "Mark Table as Failed_SpecialTables",
+							"type": "Lookup",
+							"dependsOn": [
+								{
+									"activity": "GetLatestData_SpecialTables",
+									"dependencyConditions": [
+										"Failed"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 3,
+								"retryIntervalInSeconds": 60,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderQuery": {
+										"value": "update dbo.T_BISelfServiceDB_LoadStats\nset CurrentLoadStatus = 'Failed', LoadEndDate = getdate()\nwhere TableSchema = '@{item().TABLE_SCHEMA}' and TableName = '@{item().TABLE_NAME}'\nand cast(LoadStartDate as date) = cast(getdate() as date)\nand PipelineName = '@{pipeline().Pipeline}'\nand CurrentLoadStatus = 'Processing'\n\nselect 1",
+										"type": "Expression"
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"dataset": {
+									"referenceName": "DS_AzureBISelfService_Generic",
+									"type": "DatasetReference"
+								}
+							}
+						},
+						{
+							"name": "GetLatestData_SpecialTables",
+							"type": "ExecuteDataFlow",
+							"dependsOn": [
+								{
+									"activity": "Mark Table as Processing_SpecialTables",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "1.00:00:00",
+								"retry": 3,
+								"retryIntervalInSeconds": 60,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"dataflow": {
+									"referenceName": "ExtractLoadLatestRecords_PC_DailyLoad_SpecialTables",
+									"type": "DataFlowReference",
+									"parameters": {
+										"TableName": {
+											"value": "'@{item().Table_Name}'",
+											"type": "Expression"
+										},
+										"SchemaName": {
+											"value": "'@{item().Table_Schema}'",
+											"type": "Expression"
+										},
+										"LoadStartDate": {
+											"value": "'@{activity('LookupLoadStartDate').output.value[0].LoadStartDate}'",
+											"type": "Expression"
+										}
+									},
+									"datasetParameters": {
+										"InsertUpdateRecords": {
+											"TableSchema": "PC_Daily",
+											"TableName": {
+												"value": "@concat('v_',item().table_Name)",
+												"type": "Expression"
+											}
+										},
+										"DeleteRecords": {
+											"TableSchema": "PC_Daily",
+											"TableName": {
+												"value": "@concat('v_',item().table_Name)",
+												"type": "Expression"
+											}
+										}
+									}
+								},
+								"compute": {
+									"coreCount": 8,
+									"computeType": "General"
+								},
+								"traceLevel": "Fine"
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "Update LoadStartDate",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "Get latest load date",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 3,
+					"retryIntervalInSeconds": 60,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": {
+							"value": "update dbo.T_BISelfServiceDBLoad_InputParam\nset LoadStartDate = '@{activity('Get latest load date').output.value[0].LoadStartDate}'\nwhere LoadSchema = 'PC_Daily'\n\nselect 1\n",
+							"type": "Expression"
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "DS_AzureBISelfService_Generic",
+						"type": "DatasetReference"
+					}
+				}
+			},
+			{
+				"name": "Get latest load date",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "LoopThroughEachTLTable",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "LoopThroughEachPCTable_SpecialTables",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "LoopThroughEachPCTable",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 3,
+					"retryIntervalInSeconds": 60,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": "select max(ADFUpdateTime) as LoadStartDate\nfrom PC.pc_job",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "DS_AzureBIHistory_Generic",
+						"type": "DatasetReference"
+					},
+					"firstRowOnly": false
+				}
+			}
+		],
+		"folder": {
+			"name": "BISelfServiceDBLoad"
+		},
+		"annotations": [],
+		"lastPublishTime": "2022-06-10T19:28:52Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

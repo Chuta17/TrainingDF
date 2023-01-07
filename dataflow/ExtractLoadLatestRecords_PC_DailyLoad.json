@@ -1,0 +1,58 @@
+{
+	"name": "ExtractLoadLatestRecords_PC_DailyLoad",
+	"properties": {
+		"folder": {
+			"name": "BISelfService"
+		},
+		"type": "MappingDataFlow",
+		"typeProperties": {
+			"sources": [
+				{
+					"dataset": {
+						"referenceName": "DS_AzureBIHistory_Generic",
+						"type": "DatasetReference"
+					},
+					"name": "GetActiveRecords"
+				},
+				{
+					"dataset": {
+						"referenceName": "DS_AzureBIHistory_Generic",
+						"type": "DatasetReference"
+					},
+					"name": "GetDeletedRecords"
+				}
+			],
+			"sinks": [
+				{
+					"dataset": {
+						"referenceName": "DS_AzureBISelfService_Generic_wParameters",
+						"type": "DatasetReference"
+					},
+					"name": "InsertUpdateRecords"
+				},
+				{
+					"dataset": {
+						"referenceName": "DS_AzureBISelfService_Generic_wParameters",
+						"type": "DatasetReference"
+					},
+					"name": "DeleteRecords"
+				}
+			],
+			"transformations": [
+				{
+					"name": "AlterRow1"
+				},
+				{
+					"name": "AlterRow2"
+				},
+				{
+					"name": "SortByADFUpdatetime"
+				},
+				{
+					"name": "AggregateOnPublicId"
+				}
+			],
+			"script": "parameters{\n\tTableName as string,\n\tSchemaName as string,\n\tLoadStartDate as string\n}\nsource(output(\n\t\tRateBook as long,\n\t\tSubjectToReporting as boolean,\n\t\tRoundingLevel as integer,\n\t\tEffectiveDate as timestamp,\n\t\tOverrideBaseRate as decimal(14,4),\n\t\tActualAmount as decimal(18,2),\n\t\tPublicID as string,\n\t\tActualBaseRate as decimal(14,4),\n\t\tChangeType as integer,\n\t\tRoundingMode as integer,\n\t\tArchivePartition as long,\n\t\tExpirationDate as timestamp,\n\t\tPersonalAutoLine as long,\n\t\tChargeGroup as string,\n\t\tPersonalAutoCov as long,\n\t\tCreateUserID as long,\n\t\tStandardTermAmount as decimal(18,2),\n\t\tBranchID as long,\n\t\tID as long,\n\t\tStandardAdjRate as decimal(14,4),\n\t\tBeanVersion as integer,\n\t\tOverrideTermAmount as decimal(18,2),\n\t\tUpdateUserID as long,\n\t\tBasis as decimal(22,2),\n\t\tPersonalVehicleCov as long,\n\t\tPercentage_Ext as decimal(14,4),\n\t\tStandardBaseRate as decimal(14,4),\n\t\tActualAdjRate as decimal(14,4),\n\t\tPAPIPCovCostType as integer,\n\t\tUpdateTime as timestamp,\n\t\tNumDaysInRatedTerm as integer,\n\t\tOverridable as boolean,\n\t\tRateAmountType as integer,\n\t\tBasedOnID as long,\n\t\tOverrideReason as string,\n\t\tStandardAmount as decimal(18,2),\n\t\tSubtype as integer,\n\t\tPersonalVehicle as long,\n\t\tOverrideAdjRate as decimal(14,4),\n\t\tCreateTime as timestamp,\n\t\tChargePattern as integer,\n\t\tProrationMethod as integer,\n\t\tActualTermAmount as decimal(18,2),\n\t\tOverrideAmount as decimal(18,2),\n\t\tOverrideSource as integer,\n\t\tFixedID as long,\n\t\tPATNCRdshrCovCostType_Ext as integer,\n\t\tPALoanGapCovCostType_Ext as integer,\n\t\tActualAmountBilling as decimal(18,2),\n\t\tActualAmount_cur as integer,\n\t\tActualAmountBilling_cur as integer,\n\t\tActualTermAmountBilling as decimal(18,2),\n\t\tActualTermAmount_cur as integer,\n\t\tActualTermAmountBilling_cur as integer,\n\t\tStandardAmountBilling as decimal(18,2),\n\t\tStandardAmount_cur as integer,\n\t\tStandardAmountBilling_cur as integer,\n\t\tOverrideAmountBilling as decimal(18,2),\n\t\tOverrideAmount_cur as integer,\n\t\tOverrideAmountBilling_cur as integer,\n\t\tStandardTermAmountBilling as decimal(18,2),\n\t\tStandardTermAmount_cur as integer,\n\t\tStandardTermAmountBilling_cur as integer,\n\t\tOverrideTermAmountBilling as decimal(18,2),\n\t\tOverrideTermAmount_cur as integer,\n\t\tOverrideTermAmountBilling_cur as integer,\n\t\tFXRateConversionUsed as boolean,\n\t\tPolicyFXRate as long,\n\t\tCostCode_ExtID as long,\n\t\tBillGroup_Ext as string,\n\t\tCurrentIndicator as string,\n\t\tRowEffectiveDate as timestamp,\n\t\tRowExpirationDate as string,\n\t\tADFCreatetime as timestamp,\n\t\tADFUpdatetime as timestamp,\n\t\tDeleteIndicator as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: (\"select * from {$SchemaName}.{$TableName} where currentIndicator = 'Y' and deleteIndicator = 'N' and cast(ADFUpdateTime as date) > '{$LoadStartDate}'\"),\n\tformat: 'query',\n\tpartitionColumn: 'PublicID',\n\tpartitionBy('external', 4)) ~> GetActiveRecords\nsource(output(\n\t\tRescindNotificationDate as timestamp,\n\t\tAuditInformationID as long,\n\t\tArchiveFailureID as long,\n\t\tPurgeStatus as integer,\n\t\tRetired as long,\n\t\tRenewalCode as integer,\n\t\tCancelReasonCode as integer,\n\t\tNextPurgeCheckDate as timestamp,\n\t\tWCFEINOfficialID_Ext as boolean,\n\t\tWCAccountOrgType_Ext as boolean,\n\t\tReviewer_Ext as long,\n\t\tNonRenewalNotifDate as timestamp,\n\t\tScheduled_Ext as timestamp,\n\t\tExcludeReason as string,\n\t\tID as long,\n\t\tBeanVersion as integer,\n\t\tArchiveFailureDetailsID as long,\n\t\tChangePolicyNumber as boolean,\n\t\tWCLetterGenGroupType_Ext as integer,\n\t\tDepositDueDate_Ext as timestamp,\n\t\tPrimaryInsuredName as string,\n\t\tReinstateCode as integer,\n\t\tPaymentReceived as decimal(18,2),\n\t\tDateQuoteNeeded as timestamp,\n\t\tInternalReason_Ext as integer,\n\t\tSSN_Ext as boolean,\n\t\tBindOption as integer,\n\t\tWCTINOfficialID_Ext as boolean,\n\t\tAuditor_Ext as long,\n\t\tRewriteType as integer,\n\t\tSource as integer,\n\t\tSubtype as integer,\n\t\tManagerApprovalNeeded as boolean,\n\t\tJobGroup as long,\n\t\tPolicyID as long,\n\t\tWCPriorRenewalStatus_Ext as integer,\n\t\tCloseDate as timestamp,\n\t\tNotificationAckDate as timestamp,\n\t\tRejectReasonText as string,\n\t\tSideBySide as boolean,\n\t\tInitialNotificationDate as timestamp,\n\t\tNotificationDate as timestamp,\n\t\tRenewalNotifDate as timestamp,\n\t\tPublicID as string,\n\t\tCancelProcessDate as timestamp,\n\t\tWaived_Ext as boolean,\n\t\tArchiveSchemaInfo as long,\n\t\tArchivePartition as long,\n\t\tWCDeclineReason_Ext as integer,\n\t\tStatus_Ext as integer,\n\t\tCreateUserID as long,\n\t\tNotTakenNotifDate as timestamp,\n\t\tQuoteType as integer,\n\t\tRejectReason as integer,\n\t\tArchiveDate as timestamp,\n\t\tDocumentSent_Ext as boolean,\n\t\tPayrolls_Ext as integer,\n\t\tUpdateUserID as long,\n\t\tNoCharge_Ext as boolean,\n\t\tSubmissionDate as timestamp,\n\t\tDividentHold_Ext as boolean,\n\t\tDescription as string,\n\t\tJobNumber as string,\n\t\tEscalateAfterHoldReleased as boolean,\n\t\tEstimated_Ext as boolean,\n\t\tUpdateTime as timestamp,\n\t\tExcludedFromArchive as boolean,\n\t\tRejected as boolean,\n\t\tInsuranceCompanyCode_Ext as integer,\n\t\tNonRenewalCode as integer,\n\t\tWCBureauID_Ext as boolean,\n\t\tCreateTime as timestamp,\n\t\tPrimaryInsuredNameDenorm as string,\n\t\tSecondManager_Ext as long,\n\t\tArchiveState as integer,\n\t\tFirstManager_Ext as long,\n\t\tProducerChangeSource_Ext as integer,\n\t\tBureauIDChangedState_Ext as string,\n\t\tWCReasonCodeForCancel_Ext as integer,\n\t\tIsWCManualAudit_Ext as boolean,\n\t\tOverallStatus_Ext as integer,\n\t\tLatestAttemptStatus as integer,\n\t\tPADeclineReason_Ext as integer,\n\t\tSaveDraftClickUser_Ext as long,\n\t\tFraudAcknowledgement_MPExt as boolean,\n\t\tPARenewalQuestionnaireSent_Ext as boolean,\n\t\tDateLastSaved_Ext as timestamp,\n\t\tPAPortalStateCode_MPExt as integer,\n\t\tPolicyChangeActivity_Ext as boolean,\n\t\tCurrentSource_Ext as integer,\n\t\tFirstSaveDraftClick_Ext as timestamp,\n\t\tLastPageVisited_MPExt as string,\n\t\tOnlineSoftQuote_Ext as boolean,\n\t\tPAOtherCancelReason_Ext as integer,\n\t\tCreatedFromType_Ext as integer,\n\t\tIsPortalSubmission_MPExt as boolean,\n\t\tIsConvertedJob_Ext as boolean,\n\t\tWCAuditTransferOther_Ext as string,\n\t\tWCIndependentCompany_Ext as string,\n\t\tUserID as long,\n\t\tWCManagerApprovalTwo_Ext as boolean,\n\t\tMailDate_Ext as timestamp,\n\t\tWCPaymentPlanChangeType_Ext as integer,\n\t\tWCReissueRenewalSent_Ext as boolean,\n\t\tWCChangePaymentPlan_Ext as boolean,\n\t\tBCCancellationIndicator_Ext as boolean,\n\t\tPAReinstatementFeeFlag_Ext as boolean,\n\t\tWCNOCPackageSent_Ext as boolean,\n\t\tPANOCPackageSent_Ext as boolean,\n\t\tWCIsTrueUpReport_Ext as boolean,\n\t\tWCAuditedPremDiff_Ext as decimal(18,2),\n\t\tisReverseCancelJobDiv_Ext as boolean,\n\t\tHOOtherCancelReason_Ext as integer,\n\t\tPUPReinstatementFeeFlag_Ext as boolean,\n\t\tPUPDeclineReason_Ext as integer,\n\t\tHONOCPackageSent_Ext as boolean,\n\t\tPUPNOCPackageSent_Ext as boolean,\n\t\tHORedirectPaperwork_Ext as boolean,\n\t\tPUPRenewalQuestSent_Ext as boolean,\n\t\tDWRenewalQuestSent_Ext as boolean,\n\t\tHOReinstatementFeeFlag_Ext as boolean,\n\t\tPUPOtherCancelReason_Ext as integer,\n\t\tPUPRedirectPaperwork_Ext as boolean,\n\t\tHORenewalQuestSent_Ext as boolean,\n\t\tWCNoncomplianceCharge_Ext as boolean,\n\t\tQuoteOperationStage_Ext as integer,\n\t\tPolicyChangeUMUIMActivity_Ext as boolean,\n\t\tOriginForm_MPExt as string,\n\t\tOrigin_MPExt as string,\n\t\tLastNotifiedCancellationDate as timestamp,\n\t\tPaymentReceived_cur as integer,\n\t\tPolicyTerm as long,\n\t\tJobNumberDenorm as string,\n\t\tGL7IndependentCompany_Ext as integer,\n\t\tCARenewalQuestionnaireSent_Ext as boolean,\n\t\tCA7NOCPackageSent_Ext as boolean,\n\t\tGL7NOCPackageSent_Ext as boolean,\n\t\tCLDeclineReason_Ext as integer,\n\t\tPolicyChangeType_Ext as integer,\n\t\tCreditDebitPay_Ext as boolean,\n\t\tChangeDesc_Ext as string,\n\t\tBP7NOCPackageSent_Ext as boolean,\n\t\tCUPNOCPackageSent_Ext as boolean,\n\t\tExternalSourceApp_MPExt as string,\n\t\tCertOfNoLossRecd_Ext as boolean,\n\t\tRenewalInvoice_Ext as long,\n\t\tBCReinstateIndicator_Ext as boolean,\n\t\tCurrentIndicator as string,\n\t\tRowEffectiveDate as timestamp,\n\t\tRowExpirationDate as string,\n\t\tADFCreatetime as timestamp,\n\t\tADFUpdatetime as timestamp,\n\t\tDeleteIndicator as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: (\"select * from {$SchemaName}.{$TableName} where deleteIndicator = 'Y' and cast(ADFUpdateTime as date) > '{$LoadStartDate}'\"),\n\tformat: 'query',\n\tpartitionColumn: 'PublicID',\n\tpartitionBy('external', 4)) ~> GetDeletedRecords\nAggregateOnPublicId alterRow(upsertIf(true())) ~> AlterRow1\nGetDeletedRecords alterRow(deleteIf(true())) ~> AlterRow2\nGetActiveRecords sort(desc(ADFUpdatetime, false)) ~> SortByADFUpdatetime\nSortByADFUpdatetime aggregate(groupBy(PublicID),\n\teach(match(name!='PublicID'), $$ = first($$))) ~> AggregateOnPublicId\nAlterRow1 sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:false,\n\tupdateable:false,\n\tupsertable:true,\n\tkeys:['PublicID'],\n\tformat: 'table',\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true,\n\tsaveOrder: 1,\n\terrorHandlingOption: 'stopOnFirstError') ~> InsertUpdateRecords\nAlterRow2 sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:true,\n\tinsertable:false,\n\tupdateable:false,\n\tupsertable:false,\n\tkeys:['PublicID'],\n\tformat: 'table',\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true,\n\tsaveOrder: 2,\n\terrorHandlingOption: 'stopOnFirstError') ~> DeleteRecords"
+		}
+	}
+}

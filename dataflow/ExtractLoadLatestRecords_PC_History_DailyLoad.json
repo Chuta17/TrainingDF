@@ -1,0 +1,58 @@
+{
+	"name": "ExtractLoadLatestRecords_PC_History_DailyLoad",
+	"properties": {
+		"folder": {
+			"name": "BISelfService"
+		},
+		"type": "MappingDataFlow",
+		"typeProperties": {
+			"sources": [
+				{
+					"dataset": {
+						"referenceName": "DS_AzureBIHistory_Generic",
+						"type": "DatasetReference"
+					},
+					"name": "GetActiveRecords"
+				},
+				{
+					"dataset": {
+						"referenceName": "DS_AzureBIHistory_Generic",
+						"type": "DatasetReference"
+					},
+					"name": "GetDeletedRecords"
+				}
+			],
+			"sinks": [
+				{
+					"dataset": {
+						"referenceName": "DS_AzureBISelfService_Generic_wParameters",
+						"type": "DatasetReference"
+					},
+					"name": "InsertUpdateRecords"
+				},
+				{
+					"dataset": {
+						"referenceName": "DS_AzureBISelfService_Generic_wParameters",
+						"type": "DatasetReference"
+					},
+					"name": "DeleteRecords"
+				}
+			],
+			"transformations": [
+				{
+					"name": "AlterRow1"
+				},
+				{
+					"name": "AlterRow2"
+				},
+				{
+					"name": "SortByADFUpdatetime"
+				},
+				{
+					"name": "AggregateOnPublicId"
+				}
+			],
+			"script": "parameters{\n\tTableName as string,\n\tSchemaName as string,\n\tLoadStartDate as string\n}\nsource(output(\n\t\tUserID as long,\n\t\tPolicyTransferID as long,\n\t\tAmount_Ext as decimal(18,2),\n\t\tType as integer,\n\t\tAccountID as long,\n\t\tPcUserName_Ext as string,\n\t\tPublicID as string,\n\t\tEventDate as timestamp,\n\t\tRuleUID as string,\n\t\tOtherAccountID as long,\n\t\tRoleTransferred as integer,\n\t\tEventTimestamp as timestamp,\n\t\tID as long,\n\t\tPolicyPeriodID as long,\n\t\tProducerID as long,\n\t\tBeanVersion as integer,\n\t\tCountsAsActivity as boolean,\n\t\tRefNumber as string,\n\t\tDescription as string,\n\t\tTransactionID as long,\n\t\tCustomType as integer,\n\t\tWriteoffID as long,\n\t\tLoadCommandID as long,\n\t\tEventType as integer,\n\t\tSubtype as integer,\n\t\tHistoryUserID as long,\n\t\tPlanID as long,\n\t\tAmount_Ext_cur as integer,\n\t\tArchivePartition as long,\n\t\tCurrentIndicator as string,\n\t\tRowEffectiveDate as timestamp,\n\t\tRowExpirationDate as string,\n\t\tADFCreatetime as timestamp,\n\t\tADFUpdatetime as timestamp,\n\t\tDeleteIndicator as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: (\"select * from {$SchemaName}.{$TableName} where currentIndicator = 'Y' and deleteIndicator = 'N' and cast(ADFUpdateTime as date) > '{$LoadStartDate}'\"),\n\tformat: 'query',\n\tpartitionColumn: 'PublicID',\n\tpartitionBy('external', 4)) ~> GetActiveRecords\nsource(output(\n\t\tUserID as long,\n\t\tPolicyTransferID as long,\n\t\tAmount_Ext as decimal(18,2),\n\t\tType as integer,\n\t\tAccountID as long,\n\t\tPcUserName_Ext as string,\n\t\tPublicID as string,\n\t\tEventDate as timestamp,\n\t\tRuleUID as string,\n\t\tOtherAccountID as long,\n\t\tRoleTransferred as integer,\n\t\tEventTimestamp as timestamp,\n\t\tID as long,\n\t\tPolicyPeriodID as long,\n\t\tProducerID as long,\n\t\tBeanVersion as integer,\n\t\tCountsAsActivity as boolean,\n\t\tRefNumber as string,\n\t\tDescription as string,\n\t\tTransactionID as long,\n\t\tCustomType as integer,\n\t\tWriteoffID as long,\n\t\tLoadCommandID as long,\n\t\tEventType as integer,\n\t\tSubtype as integer,\n\t\tHistoryUserID as long,\n\t\tPlanID as long,\n\t\tAmount_Ext_cur as integer,\n\t\tArchivePartition as long,\n\t\tCurrentIndicator as string,\n\t\tRowEffectiveDate as timestamp,\n\t\tRowExpirationDate as string,\n\t\tADFCreatetime as timestamp,\n\t\tADFUpdatetime as timestamp,\n\t\tDeleteIndicator as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: (\"select * from {$SchemaName}.{$TableName} where deleteIndicator = 'Y' and cast(ADFUpdateTime as date) > '{$LoadStartDate}'\"),\n\tformat: 'query',\n\tpartitionColumn: 'PublicID',\n\tpartitionBy('external', 4)) ~> GetDeletedRecords\nAggregateOnPublicId alterRow(upsertIf(true())) ~> AlterRow1\nGetDeletedRecords alterRow(deleteIf(true())) ~> AlterRow2\nGetActiveRecords sort(desc(ADFUpdatetime, false)) ~> SortByADFUpdatetime\nSortByADFUpdatetime aggregate(groupBy(PublicID),\n\teach(match(name!='PublicID'), $$ = first($$))) ~> AggregateOnPublicId\nAlterRow1 sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:false,\n\tupdateable:false,\n\tupsertable:true,\n\tkeys:['PublicID'],\n\tformat: 'table',\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true,\n\tsaveOrder: 2,\n\terrorHandlingOption: 'stopOnFirstError') ~> InsertUpdateRecords\nAlterRow2 sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:true,\n\tinsertable:false,\n\tupdateable:false,\n\tupsertable:false,\n\tkeys:['PublicID'],\n\tformat: 'table',\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true,\n\tsaveOrder: 1,\n\terrorHandlingOption: 'stopOnFirstError') ~> DeleteRecords"
+		}
+	}
+}

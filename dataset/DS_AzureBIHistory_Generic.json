@@ -1,0 +1,13 @@
+{
+	"name": "DS_AzureBIHistory_Generic",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "LS_ASQL_PROD_AZURE_BIHistory",
+			"type": "LinkedServiceReference"
+		},
+		"annotations": [],
+		"type": "AzureSqlTable",
+		"schema": []
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}
